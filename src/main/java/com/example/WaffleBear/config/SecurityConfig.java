@@ -1,7 +1,7 @@
 package com.example.WaffleBear.Config;
 
-import com.example.WaffleBear.Config.Filter.JwtFilter;
 //import com.example.WaffleBear.Config.Filter.LoginFilter;
+import com.example.WaffleBear.Config.Filter.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +38,7 @@ public class SecurityConfig {
         // 3. 인가(Authorization) 설정
         http.authorizeHttpRequests(auth -> auth
                 // 로그인, 회원가입 등은 누구나 접근 가능
-                .requestMatchers("/user/**","/board/list", "/login", "/api/login", "/error").permitAll()
+                .requestMatchers("/user/**", "/login", "/editor/**" , "/error").permitAll()
                 // 나머지 요청(특히 /board/save 등)은 반드시 인증 필요
                 .anyRequest().authenticated()
         );
