@@ -1,6 +1,6 @@
-package com.example.WaffleBear.posts;
+package com.example.WaffleBear.workspace;
 
-import com.example.WaffleBear.posts.model.Posts;
+import com.example.WaffleBear.workspace.model.post.Posts;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
