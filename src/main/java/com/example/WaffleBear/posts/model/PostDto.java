@@ -20,7 +20,7 @@ public class PostDto {
             return Posts.builder()
                     .title(this.title)
                     .contents(this.contents)
-                    .user_idx(user.getIdx())
+                    .user(this.user)
                     .build();
         }
     }
