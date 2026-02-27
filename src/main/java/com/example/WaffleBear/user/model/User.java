@@ -24,6 +24,7 @@ public class User {
     @Setter
     private Boolean enable;
 
-    @ColumnDefault(value = "'ROLE_USER'")
-    private String role;
+    @Builder.Default
+    private String role = "ROLE_USER";
+
 }
