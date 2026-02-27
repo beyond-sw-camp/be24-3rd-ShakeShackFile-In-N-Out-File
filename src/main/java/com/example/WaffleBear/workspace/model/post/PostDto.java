@@ -16,8 +16,8 @@ public class PostDto {
         @Setter
         private User user;
 
-        public Posts toEntity() {
-            return Posts.builder()
+        public Post toEntity() {
+            return Post.builder()
                     .title(this.title)
                     .contents(this.contents)
                     .user(this.user)
@@ -30,7 +30,7 @@ public class PostDto {
         private String title;
         private String contents;
 
-        public static ResPost from(Posts entity) {
+        public static ResPost from(Post entity) {
             return ResPost.builder()
                     .title(entity.getTitle())
                     .contents(entity.getTitle())
@@ -44,7 +44,7 @@ public class PostDto {
         private String title;
         private LocalDateTime updatedAt;
 
-        public static ResList from(Posts entity) {
+        public static ResList from(Post entity) {
             return ResList.builder()
                     .title(entity.getTitle())
                     .updatedAt(entity.getUpdatedAt())

@@ -1,7 +1,8 @@
-package com.example.WaffleBear.workspace;
+package com.example.WaffleBear.workspace.service;
 
-import com.example.WaffleBear.workspace.model.post.Posts;
+import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.post.PostDto;
+import com.example.WaffleBear.workspace.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +15,7 @@ public class PostService {
 
     public PostDto.ResPost save(PostDto.ReqPost dto) {
 
-        Posts result = dto.toEntity();
+        Post result = dto.toEntity();
 
         result = pr.save(result);
 
@@ -22,7 +23,7 @@ public class PostService {
     }
     public PostDto.ResPost read(Long post_idx, Long check_user) {
 
-        Posts result = pr.findById(post_idx).orElseThrow(
+        Post result = pr.findById(post_idx).orElseThrow(
                 () -> new RuntimeException("파일이 없습니다.")
         );
 
@@ -35,7 +36,7 @@ public class PostService {
 
     public List<PostDto.ResList> list(Long user_idx) {
 
-        List<Posts> postList = pr.findAllByUser_idx(user_idx);
+        List<Post> postList = pr.findAllByUser_idx(user_idx);
 
         return postList.stream().map(PostDto.ResList::from).toList();
     }
