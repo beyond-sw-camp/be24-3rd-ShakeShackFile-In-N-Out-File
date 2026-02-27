@@ -1,7 +1,7 @@
-package com.example.WaffleBear.config;
+package com.example.WaffleBear.Config;
 
-import com.example.WaffleBear.config.Filter.JwtFilter;
-import com.example.WaffleBear.config.Filter.LoginFilter;
+import com.example.WaffleBear.Config.Filter.JwtFilter;
+//import com.example.WaffleBear.Config.Filter.LoginFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,7 +22,7 @@ import java.util.List;
 @EnableWebSecurity // Security 설정을 활성화
 public class SecurityConfig {
     private final AuthenticationConfiguration configuration;
-    private final LoginFilter loginFilter;
+//    private final LoginFilter loginFilter;
     private final JwtFilter jwtFilter;
 
     @Bean
@@ -47,7 +47,7 @@ public class SecurityConfig {
         // jwtFilter가 먼저 실행되어 쿠키를 확인하고 인증 객체를 만들어야 합니다.
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         // 그 다음 로그인 필터(ID/PW 검증)가 위치합니다.
-        http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
+//        http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
