@@ -1,4 +1,4 @@
-package com.example.WaffleBear.posts.model;
+package com.example.WaffleBear.workspace.model.post;
 
 import com.example.WaffleBear.user.model.User;
 import lombok.Builder;

@@ -1,12 +1,11 @@
-package com.example.WaffleBear.posts;
+package com.example.WaffleBear.workspace;
 
-import com.example.WaffleBear.posts.model.Posts;
-import com.example.WaffleBear.posts.model.PostDto;
+import com.example.WaffleBear.workspace.model.post.Posts;
+import com.example.WaffleBear.workspace.model.post.PostDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
