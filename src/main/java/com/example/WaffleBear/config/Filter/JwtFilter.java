@@ -1,6 +1,6 @@
-package com.example.WaffleBear.Config.Filter;
+package com.example.WaffleBear.config.Filter;
 
-import com.example.WaffleBear.Utils.JwtUtil;
+import com.example.WaffleBear.utils.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;

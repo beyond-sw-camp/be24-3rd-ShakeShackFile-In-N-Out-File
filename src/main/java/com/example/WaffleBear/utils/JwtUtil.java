@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Utils;
+package com.example.WaffleBear.utils;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -15,7 +15,7 @@ public class JwtUtil {
 
     private SecretKey encodeKey;
 
-    @Value("${jwt.expire")
+    @Value("${jwt.expire}")
     private int expire;
 
     public JwtUtil(@Value("${jwt.key}") String key) {
