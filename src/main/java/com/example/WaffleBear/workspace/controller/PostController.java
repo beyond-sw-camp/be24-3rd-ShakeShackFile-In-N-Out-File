@@ -1,5 +1,6 @@
-package com.example.WaffleBear.workspace;
+package com.example.WaffleBear.workspace.controller;
 
+import com.example.WaffleBear.workspace.service.PostService;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.UserRepository;
