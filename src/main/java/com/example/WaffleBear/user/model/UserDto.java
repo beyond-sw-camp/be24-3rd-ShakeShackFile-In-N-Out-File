@@ -24,4 +24,6 @@ public class UserDto {
                     .build();
         }
     }
+
+    public record LoginReq(String email, String name, String password){}
 }
