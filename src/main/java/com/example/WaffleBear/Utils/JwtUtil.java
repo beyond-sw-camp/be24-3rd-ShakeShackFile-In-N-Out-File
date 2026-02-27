@@ -15,7 +15,7 @@ public class JwtUtil {
 
     private SecretKey encodeKey;
 
-    @Value("${jwt.expire")
+    @Value("${jwt.expire}")
     private int expire;
 
     public JwtUtil(@Value("${jwt.key}") String key) {
