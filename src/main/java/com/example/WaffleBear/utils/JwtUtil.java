@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Utils;
+package com.example.WaffleBear.utils;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
