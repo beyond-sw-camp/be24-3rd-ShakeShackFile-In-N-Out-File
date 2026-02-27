@@ -5,10 +5,7 @@ import com.example.WaffleBear.user.model.UserDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RequestMapping("/user")
 @RestController
@@ -23,5 +20,11 @@ public class UserController {
         UserDto.SignupRes result = userService.signup(dto);
 
         return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @GetMapping("/verify")
+    public ResponseEntity<String> verifyEmail(@RequestParam("token") String token) {
+        userService.verifyEmail(token);
+        return ResponseEntity.ok("성공");
     }
 }
