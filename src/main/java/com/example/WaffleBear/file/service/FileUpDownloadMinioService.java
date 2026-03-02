@@ -23,6 +23,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FileUpDownloadMinioService implements FileUpDownloadService {
 
+    //Todo 0! : 파일 저장 이름, 경로 설정하기, 그리고 DB저장 변수 맞게 조절(DTO, Entity, Service 등)
+
     private final FileUpDownloadRepository fileUpDownloadRepository;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
