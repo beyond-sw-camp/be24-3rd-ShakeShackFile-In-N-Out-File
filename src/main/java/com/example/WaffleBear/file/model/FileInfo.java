@@ -20,27 +20,24 @@ public class FileInfo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_idx")
+    private User user;
+
     @Column(nullable = false)
     private String fileOriginName;
-
+    @Column(nullable = false)
+    private String fileFormat;
     @Column(nullable = false)
     private String fileSaveName;
 
-    private String fileFormat;
-
     private Long fileSize;
 
-    private LocalDateTime uploadDate;
-
-    private LocalDateTime lastModifyDate;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
-
     private boolean lockedFile;
-
     private boolean sharedFile;
+
+    private LocalDateTime uploadDate;
+    private LocalDateTime lastModifyDate;
 
     @PrePersist
     public void prePersist() {

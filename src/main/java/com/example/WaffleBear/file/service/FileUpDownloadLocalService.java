@@ -80,7 +80,7 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
         return FileInfoDto.FileRes.builder()
                 .fileOriginName(filePath.getFileName().toString())
                 .fileSaveName(filePath.toString())
-                .objectUrl(filePath.toUri().toString())
+//                .objectUrl(filePath.toUri().toString())
                 .presignedUrlExpiresIn(null)
                 .build();
     }
@@ -100,20 +100,20 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
         }
 
         return FileInfoDto.FileRes.builder()
-                .fileIdx(entity.getIdx())
+//                .fileIdx(entity.getIdx())
                 .fileOriginName(entity.getFileOriginName())
                 .fileSaveName(entity.getFileSaveName())
-                .objectUrl(filePath.toUri().toString())
+//                .objectUrl(filePath.toUri().toString())
                 .presignedUrlExpiresIn(null)
                 .build();
     }
 
     private FileInfoDto.FileRes buildResponse(FileInfo saved, Path targetPath) {
         return FileInfoDto.FileRes.builder()
-                .fileIdx(saved.getIdx())
+//                .fileIdx(saved.getIdx())
                 .fileOriginName(saved.getFileOriginName())
                 .fileSaveName(saved.getFileSaveName())
-                .objectUrl(targetPath.toUri().toString())
+//                .objectUrl(targetPath.toUri().toString())
                 .presignedUrlExpiresIn(null)
                 .build();
     }

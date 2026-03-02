@@ -65,11 +65,11 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
 
             response.add(
                     FileInfoDto.FileRes.builder()
-                            .fileIdx(saved.getIdx())
+//                            .fileIdx(saved.getIdx())
                             .fileOriginName(saved.getFileOriginName())
                             .fileSaveName(saved.getFileSaveName())
                             .presignedUploadUrl(presignedUploadUrl)
-                            .objectUrl(trim(minioProperties.getEndpoint()) + "/" + minioProperties.getBucket_cloud() + "/" + saveName)
+//                            .objectUrl(trim(minioProperties.getEndpoint()) + "/" + minioProperties.getBucket_cloud() + "/" + saveName)
                             .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
             );

@@ -4,10 +4,7 @@ import com.example.WaffleBear.file.model.FileInfoDto;
 import com.example.WaffleBear.file.service.FileUpDownloadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -23,5 +20,15 @@ public class FileUpDownloadController {
 
         return ResponseEntity.ok(result);
     }
+
+//    @PostMapping("/download")
+//    public ResponseEntity<List<FileInfoDto.FileRes>> fileDownload(@RequestBody List<FileInfoDto.FileReq> files){
+//        List<FileInfoDto.FileRes> result = fileUpDownloadService.fileDownload(files);
+
+//        return ResponseEntity.ok(result);
+//    }
+
+//    @GetMapping("/list")
+//    public ResponseEntity<List<FileInfoDto.>>
 
 }

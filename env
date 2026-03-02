@@ -1,8 +1,8 @@
 JWT_KEY=sdfkhgsdkglnhoiurjdfoihgh397478thgwr390289gyrfhp90823uoevbdo823uvh4tf
 JWT_EXPIRE=300000000
 MAIL_PORT=587
-MAIL_ID=zh2171@gmail.com
-MAIL_PASS=iokvmowvhfkrcgdg
+MAIL_ID=yoonjoonbeom48@gmail.com
+MAIL_PASS=rafissvptomlhkrw
 DB_SERVER=org.mariadb.jdbc.Driver
 DB_URL=jdbc:mariadb://10.10.10.30:3306/fileInnOut
 DB_ID=root
