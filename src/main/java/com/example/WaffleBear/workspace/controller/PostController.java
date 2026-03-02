@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RequestMapping("/editor")
+@RequestMapping("/workspace")
 @RequiredArgsConstructor
 @RestController
 public class PostController {
@@ -25,11 +25,11 @@ public class PostController {
             @AuthenticationPrincipal AuthUserDetails user,
             @ModelAttribute PostDto.ReqPost dto) {
 
-        String email = user.getEmail();
-        User writer = ur.findByEmail(email).orElseThrow(
-                () -> new RuntimeException("사용자를 찾을수 없습니다.")
-        );
-        dto.setUser(writer);
+//        String email = user.getEmail();
+//        User writer = ur.findByEmail(email).orElseThrow(
+//                () -> new RuntimeException("사용자를 찾을수 없습니다.")
+//        );
+
         PostDto.ResPost result =  ps.save(dto);
 
         return BaseResponse.success(ResponseEntity.ok(result));

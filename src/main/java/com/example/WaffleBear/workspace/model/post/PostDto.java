@@ -1,26 +1,29 @@
 package com.example.WaffleBear.workspace.model.post;
 
 import com.example.WaffleBear.user.model.User;
+import com.example.WaffleBear.workspace.model.relation.UserPost;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class PostDto {
 
+    @Setter
     @Getter
     public static class ReqPost {
         private String title;
         private String contents;
         @Setter
-        private User user;
+        private List<UserPost> user;
 
         public Post toEntity() {
             return Post.builder()
                     .title(this.title)
                     .contents(this.contents)
-                    .user(this.user)
+//                    .userPosts(this.user)
                     .build();
         }
     }

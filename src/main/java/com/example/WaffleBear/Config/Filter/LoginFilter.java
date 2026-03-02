@@ -1,6 +1,5 @@
 package com.example.WaffleBear.Config.Filter;
 
-
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.UserDto;
 import com.example.WaffleBear.utils.JwtUtil;

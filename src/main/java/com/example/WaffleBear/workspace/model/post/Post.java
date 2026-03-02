@@ -21,15 +21,15 @@ public class Post {
     private Long idx;
 
     // User 엔티티의 idx를 외래키로 참조 (N:1 관계)
-    @OneToMany(mappedBy = "post")
+    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserPost> userPosts;
 
     @Column(nullable = false)
     private String title;
-    @Column(columnDefinition = "TEXT", nullable = false)
+    @Column(columnDefinition = "json", nullable = false)
     private String contents;
 
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -39,11 +39,9 @@ public class Post {
         this.updatedAt = createdAt;
     }
 
-    public void update(Post post) {
-        Post.builder()
-                .title(post.getTitle())
-                .contents(post.getContents())
-                .updatedAt(LocalDateTime.now())
-                .build();
+    public void update(String title, String contents) {
+        this.title = title;
+        this.contents = contents;
+        // updatedAt은 @PreUpdate에 의해 자동으로 갱신됩니다.
     }
 }
