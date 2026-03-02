@@ -55,6 +55,9 @@ dependencies {
 
 	// OpenApi
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13")
+
+	// MinIO
+	implementation 'io.minio:minio:8.5.17'
 }
 
 tasks.named('test') {
