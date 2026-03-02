@@ -29,7 +29,7 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
 
     @PostConstruct
     public void initBucket() {
-        String bucket = minioProperties.getBucket();
+        String bucket = minioProperties.getBucket_cloud();
         try {
             boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
             if (!exists) {
@@ -69,7 +69,7 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
                             .fileOriginName(saved.getFileOriginName())
                             .fileSaveName(saved.getFileSaveName())
                             .presignedUploadUrl(presignedUploadUrl)
-                            .objectUrl(trim(minioProperties.getEndpoint()) + "/" + minioProperties.getBucket() + "/" + saveName)
+                            .objectUrl(trim(minioProperties.getEndpoint()) + "/" + minioProperties.getBucket_cloud() + "/" + saveName)
                             .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
             );
@@ -134,7 +134,7 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
             return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.PUT)
-                            .bucket(minioProperties.getBucket())
+                            .bucket(minioProperties.getBucket_cloud())
                             .object(objectName)
                             .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
