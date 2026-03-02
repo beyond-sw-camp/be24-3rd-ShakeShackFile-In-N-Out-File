@@ -13,9 +13,10 @@ public enum BaseResponseStatus {
     JWT_EXPIRED(false, 3001, "JWT 토큰이 만료되었습니다."),
     JWT_INVALID(false, 3002, "JWT 토큰이 유효하지 않습니다."),
     SIGNUP_DUPLICATE_EMAIL(false, 3003, "중복된 이메일입니다."),
-    SIGNUP_INVALID_PASSWORD(false, 3004, "비밀번호는 대,소문자, 숫자, 특수문자가 포함되어야 합니다."),
-    SIGNUP_INVALID_UUID(false, 3005, "유효하지 않은 인증값입니다. 이메일 인증을 다시 시도해주세요."),
-    LOGIN_INVALID_USERINFO(false, 3006, "이메일이나 비밀번호를 확인해주세요."),
+    SIGNUP_DUPLICATE_NAME(false, 3004, "중복된 아이디 입니다."),
+    SIGNUP_INVALID_PASSWORD(false, 3005, "비밀번호는 대,소문자, 숫자, 특수문자가 포함되어야 합니다."),
+    SIGNUP_INVALID_UUID(false, 3006, "유효하지 않은 인증값입니다. 이메일 인증을 다시 시도해주세요."),
+    LOGIN_INVALID_USERINFO(false, 3007, "이메일이나 비밀번호를 확인해주세요."),
 
     FILE_NAME_WRONG(false, 3501, "파일의 이름이 정상적이지 않습니다. 수정하셔야 업로드가 가능합니다."),
     FILE_FORMAT_WRONG(false, 3502, "파일의 형식이 지원하지 않는 형식입니다. 해당 형식은 지원하지 않습니다."),
