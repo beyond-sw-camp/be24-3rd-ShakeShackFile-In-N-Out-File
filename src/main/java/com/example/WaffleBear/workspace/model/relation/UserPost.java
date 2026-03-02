@@ -27,4 +27,7 @@ public class UserPost {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workspace_id")
     private Post workspace;
+
+    @Enumerated(EnumType.STRING)
+    private AccessRole Level;
 }
