@@ -1,14 +1,18 @@
 package com.example.WaffleBear.user;
 
+import com.example.WaffleBear.common.exception.BaseException;
+import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.user.model.EmailVerify;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.model.UserDto;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
 
 @RequiredArgsConstructor
 @Service
@@ -19,6 +23,12 @@ public class UserService {
     private final EmailVerifyService emailVerifyService;
 
     public UserDto.SignupRes signup(UserDto.SignupReq dto) {
+
+        // IDX 증가 때문에 추가함
+        if(userRepository.findByEmail(dto.email()).isPresent()) {
+            throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
+        }
+
         User user = dto.toEntity();
         user.setPassword(passwordEncoder.encode(dto.password()));
 
@@ -33,6 +43,7 @@ public class UserService {
     }
 
     public void verifyEmail(String token) {
+
         EmailVerify verificationToken = emailVerifyRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("유효하지 않은 토큰입니다."));
 

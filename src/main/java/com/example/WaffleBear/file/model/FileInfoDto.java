@@ -18,8 +18,9 @@ public class FileInfoDto {
         @Schema(description = "원본 파일 이름")
         private String fileOriginName;
         private String fileFormat;
-        private String contentType;
         private Long fileSize;
+        // 미니오 서버에서 정보를 받을 때 사용
+        private String contentType;
     }
 
     @Getter
@@ -28,11 +29,12 @@ public class FileInfoDto {
     @AllArgsConstructor
     @Builder
     public static class FileRes {
-        private Long fileIdx;
+//        private Long fileIdx;
         private String fileOriginName;
         private String fileSaveName;
+        private String fileFormat;
         private String presignedUploadUrl;
-        private String objectUrl;
+//        private String objectUrl;
         private Integer presignedUrlExpiresIn;
     }
 

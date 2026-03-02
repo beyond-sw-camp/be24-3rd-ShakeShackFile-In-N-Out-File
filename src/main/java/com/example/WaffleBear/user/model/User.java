@@ -32,4 +32,6 @@ public class User {
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     List<FileInfo> fileInfoList;
+
+    // 결제 기록이 있는지, 현재 플랜은 어떤건지 추가
 }
