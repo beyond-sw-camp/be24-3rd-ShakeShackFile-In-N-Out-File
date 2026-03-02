@@ -29,6 +29,10 @@ public class UserService {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
         }
 
+        if(userRepository.findByName(dto.name()).isPresent()) {
+            throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_NAME);
+        }
+
         User user = dto.toEntity();
         user.setPassword(passwordEncoder.encode(dto.password()));
 

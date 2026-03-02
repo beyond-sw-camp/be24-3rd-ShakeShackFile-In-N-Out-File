@@ -142,13 +142,13 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 
-    // 저장 디렉토리를 확인, 저장하기 위해서인데, 나중에 수정해야할 듯 ver2
+    // Todo 1: 저장 디렉토리를 확인, 저장하기 위해서인데, 나중에 수정해야할 듯 ver2
     private String buildObjectUrl(String objectName) {
         String endpoint = trimTrailingSlash(minioProperties.getEndpoint());
         return endpoint + "/" + minioProperties.getBucket_cloud() + "/" + objectName;
     }
 
-    // 저장 디렉토리를 확인, 저장하기 위해서인데, 나중에 수정해야할 듯 ver1
+    // Todo 2: 저장 디렉토리를 확인, 저장하기 위해서인데, 나중에 수정해야할 듯 ver1
     private String buildObjectUrl() {
         String endpoint = trimTrailingSlash(minioProperties.getEndpoint());
         return endpoint + "/" + minioProperties.getBucket_cloud() + "/";
@@ -233,12 +233,13 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
 
-    // 아직 미구현입니다..
+    // Todo 3: 아직 미구현입니다..
     @Override
     public FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto) {
         return null;
     }
 
+    // Todo 4: 아직 미구현입니다..
     @Override
     public FileInfoDto.FileRes fileList(Long idx) {
         return null;
