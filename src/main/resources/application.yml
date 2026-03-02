@@ -35,14 +35,6 @@ spring:
       hibernate:
         format_sql: true
 
-minio:
-  endpoint: ${MINIO_API}
-  access-key: ${MINIO_NAME}
-  secret-key: ${MINIO_SECRET}
-  bucket_cloud: ${MINIO_CLOUD_BUCKET}
-  bucket_work: ${MINIO_WORKSPACE_BUCKET}
-  presigned-url-expiry-seconds: 600
-
 logging:
   level:
     org:
