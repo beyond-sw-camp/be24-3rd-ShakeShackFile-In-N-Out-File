@@ -1,4 +1,4 @@
-package com.example.WaffleBear.config;
+package com.example.WaffleBear.config.oauth2;
 
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.utils.JwtUtil;
@@ -23,7 +23,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         String jwt = jwtUtil.createToken(user.getIdx(), user.getUsername(), user.getRole());
         response.addHeader("Set-Cookie", "ATOKEN=" + jwt + "; Path=/");
-        String redirectUrl = "http://localhost:5173/success";
+        String redirectUrl = "http://localhost:5173/main";
         getRedirectStrategy().sendRedirect(request, response, redirectUrl);
     }
 }
