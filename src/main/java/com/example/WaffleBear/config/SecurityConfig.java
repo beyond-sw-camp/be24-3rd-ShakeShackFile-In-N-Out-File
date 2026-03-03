@@ -1,8 +1,11 @@
-package com.example.WaffleBear.Config;
+package com.example.WaffleBear.config;
 
-import com.example.WaffleBear.Config.Filter.JwtFilter;
-import com.example.WaffleBear.Config.Filter.LoginFilter;
 
+
+
+import com.example.WaffleBear.config.Filter.JwtFilter;
+import com.example.WaffleBear.config.Filter.LoginFilter;
+import com.example.WaffleBear.user.service.OAuth2UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,10 +28,19 @@ public class SecurityConfig {
     private final AuthenticationConfiguration configuration;
     private final LoginFilter loginFilter;
     private final JwtFilter jwtFilter;
+    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+    private final OAuth2UserService oAuth2UserService;
 
     @Bean
     public SecurityFilterChain config(HttpSecurity http) throws Exception {
-        // 1. CORS 설정 적용 (이게 빠져있었습니다!)
+
+        http.oauth2Login(config -> {
+            config.userInfoEndpoint(
+                    endpoint ->
+                            endpoint.userService(oAuth2UserService)
+            );
+            config.successHandler(oAuth2AuthenticationSuccessHandler);
+        });
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         // 2. CSRF, FormLogin 등 비활성화

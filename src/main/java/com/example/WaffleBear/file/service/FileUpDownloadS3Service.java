@@ -1,7 +1,7 @@
 package com.example.WaffleBear.file.service;
 
 import com.example.WaffleBear.file.FileUpDownloadRepository;
-import com.example.WaffleBear.Config.MinioProperties;
+import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.file.model.FileInfo;
 import com.example.WaffleBear.file.model.FileInfoDto;
 import io.minio.BucketExistsArgs;
@@ -11,8 +11,6 @@ import io.minio.MinioClient;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Primary;
-import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;

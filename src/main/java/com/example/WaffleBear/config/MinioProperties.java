@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Config;
+package com.example.WaffleBear.config;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

@@ -2,9 +2,8 @@ package com.example.WaffleBear.posts;
 
 import com.example.WaffleBear.posts.model.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
-import com.example.WaffleBear.user.UserRepository;
+import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.AuthUserDetails;
-import com.example.WaffleBear.user.model.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
