@@ -1,8 +1,8 @@
-package com.example.WaffleBear.user;
+package com.example.WaffleBear.user.controller;
 
 import com.example.WaffleBear.common.model.BaseResponse;
+import com.example.WaffleBear.user.service.UserService;
 import com.example.WaffleBear.user.model.UserDto;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
