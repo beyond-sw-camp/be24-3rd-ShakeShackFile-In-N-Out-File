@@ -1,5 +1,6 @@
 package com.example.WaffleBear.posts.model;
 
+import com.example.WaffleBear.user.model.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -17,7 +18,11 @@ public class Posts {
     @Column(name = "post_idx")
     private Long idx;
 
-    private Long user_idx;
+    // User 엔티티의 idx를 외래키로 참조 (N:1 관계)
+    @ManyToOne
+    @JoinColumn(name = "user_idx")
+    @Setter
+    private User user;
 
     @Column(nullable = false)
     private String title;
@@ -34,5 +39,12 @@ public class Posts {
         this.updatedAt = createdAt;
     }
 
-    public void update()
+    public void update(Posts post) {
+        Posts.builder()
+                .title(post.getTitle())
+                .contents(post.getContents())
+                .user(post.getUser())
+                .updatedAt(LocalDateTime.now())
+                .build();
+    }
 }
