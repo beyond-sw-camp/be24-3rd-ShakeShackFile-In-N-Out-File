@@ -1,5 +1,6 @@
 package com.example.WaffleBear.posts.model;
 
+import com.example.WaffleBear.user.model.User;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -19,7 +20,7 @@ public class PostDto {
             return Posts.builder()
                     .title(this.title)
                     .contents(this.contents)
-                    .user_idx(user.getIdx())
+                    .user(this.user)
                     .build();
         }
     }
