@@ -1,7 +1,9 @@
 jwt:
   key: ${JWT_KEY}
   expire: ${JWT_EXPIRE}
-
+project:
+  aes:
+    key: aessecretkey01234567891011121314
 spring:
   security:
     oauth2:
