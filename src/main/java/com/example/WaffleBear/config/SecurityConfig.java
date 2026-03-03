@@ -39,7 +39,7 @@ public class SecurityConfig {
         // 3. 인가(Authorization) 설정
         http.authorizeHttpRequests(auth -> auth
                 // 로그인, 회원가입 등은 누구나 접근 가능
-                .requestMatchers("/user/**","/board/list", "/login", "/api/login", "/error").permitAll()
+                .requestMatchers("/user/**","/board/list", "/login", "/api/login", "/error","/file/**").permitAll()
                 // 나머지 요청(특히 /board/save 등)은 반드시 인증 필요
                 .anyRequest().authenticated()
         );
