@@ -1,6 +1,7 @@
 package com.example.WaffleBear.user.model;
 
 import lombok.Builder;
+import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -10,11 +11,36 @@ import java.util.List;
 
 @Builder
 public class AuthUserDetails implements UserDetails {
+    @Getter
     private Long idx;
+    @Getter
     private String email;
     private String password;
     private Boolean enable;
+    @Getter
     private String role;
+
+    public static AuthUserDetails from(User entity) {
+        return AuthUserDetails.builder()
+                .idx(entity.getIdx())
+                .email(entity.getEmail())
+                .password(entity.getPassword())
+                .enable(entity.getEnable())
+                .role(entity.getRole())
+                .build();
+    }
+
+    public Long getIdx() {
+        return idx;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getRole() {
+        return role;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

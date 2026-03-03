@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Config;
+package com.example.WaffleBear.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,14 +16,14 @@ public class AuthenticationManagerConfig {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
 
-//    @Bean
-//    public AuthenticationManager authenticationManager(
-//            UserDetailsService userDetailsService,
-//            PasswordEncoder passwordEncoder
-//    ) {
-//        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider(userDetailsService);
-//        authenticationProvider.setPasswordEncoder(passwordEncoder);
-//
-//        return new ProviderManager(authenticationProvider);
-//    }
+    @Bean
+    public AuthenticationManager authenticationManager(
+            UserDetailsService userDetailsService,
+            PasswordEncoder passwordEncoder
+    ) {
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider(userDetailsService);
+        authenticationProvider.setPasswordEncoder(passwordEncoder);
+
+        return new ProviderManager(authenticationProvider);
+    }
 }
