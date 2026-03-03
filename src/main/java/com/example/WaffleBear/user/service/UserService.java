@@ -1,12 +1,13 @@
-package com.example.WaffleBear.user;
+package com.example.WaffleBear.user.service;
 
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
+import com.example.WaffleBear.user.repository.EmailVerifyRepository;
+import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.EmailVerify;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.model.UserDto;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -33,9 +34,6 @@ public class UserService implements UserDetailsService {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
         }
 
-        if(userRepository.findByName(dto.name()).isPresent()) {
-            throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_NAME);
-        }
 
         User user = dto.toEntity();
         user.setPassword(passwordEncoder.encode(dto.password()));
