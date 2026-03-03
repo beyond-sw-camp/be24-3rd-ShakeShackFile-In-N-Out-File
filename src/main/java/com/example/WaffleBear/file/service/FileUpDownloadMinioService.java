@@ -3,7 +3,7 @@ package com.example.WaffleBear.file.service;
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.file.FileUpDownloadRepository;
-import com.example.WaffleBear.Config.MinioProperties;
+import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.file.model.FileInfo;
 import com.example.WaffleBear.file.model.FileInfoDto;
 import io.minio.BucketExistsArgs;
