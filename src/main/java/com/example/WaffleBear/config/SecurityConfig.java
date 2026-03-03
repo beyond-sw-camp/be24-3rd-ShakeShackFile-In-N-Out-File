@@ -3,6 +3,9 @@ package com.example.WaffleBear.config;
 import com.example.WaffleBear.config.Filter.JwtFilter;
 import com.example.WaffleBear.config.Filter.LoginFilter;
 
+import com.example.WaffleBear.config.oauth2.OAuth2AuthenticationSuccessHandler;
+import com.example.WaffleBear.config.oauth2.OAuth2AuthorizationRequestRepository;
+import com.example.WaffleBear.user.service.OAuth2UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +13,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -25,7 +29,9 @@ public class SecurityConfig {
     private final AuthenticationConfiguration configuration;
     private final LoginFilter loginFilter;
     private final JwtFilter jwtFilter;
-
+    private final OAuth2UserService oAuth2UserService;
+    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+    private final OAuth2AuthorizationRequestRepository oAuth2AuthorizationRequestRepository;
     @Bean
     public SecurityFilterChain config(HttpSecurity http) throws Exception {
         // 1. CORS 설정 적용 (이게 빠져있었습니다!)
@@ -35,7 +41,16 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable);
-
+        http.sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        http.oauth2Login(config -> {
+            config.authorizationEndpoint(
+                    endpoint -> endpoint.authorizationRequestRepository(oAuth2AuthorizationRequestRepository));
+            config.userInfoEndpoint(
+                    endpoint -> endpoint.userService(oAuth2UserService)
+            );
+            config.successHandler(oAuth2AuthenticationSuccessHandler);
+        });
         // 3. 인가(Authorization) 설정
         http.authorizeHttpRequests(auth -> auth
                 // 로그인, 회원가입 등은 누구나 접근 가능
