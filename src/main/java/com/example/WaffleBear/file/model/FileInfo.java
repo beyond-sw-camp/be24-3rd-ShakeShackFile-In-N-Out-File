@@ -31,6 +31,8 @@ public class FileInfo {
     @Column(nullable = false)
     private String fileSaveName;
 
+    private String fileSavePath;
+
     private Long fileSize;
 
     private boolean lockedFile;
