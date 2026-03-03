@@ -4,7 +4,7 @@ jwt:
 
 spring:
   application:
-    name: Spring_back
+    name: backend_team
 
   mail:
     host: smtp.gmail.com
