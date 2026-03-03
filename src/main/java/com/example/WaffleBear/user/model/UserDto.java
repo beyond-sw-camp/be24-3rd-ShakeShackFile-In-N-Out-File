@@ -12,6 +12,7 @@ public class UserDto {
                     .name(name)
                     .password(password)
                     .enable(false)
+                    .role("ROLE_USER")
                     .build();
         }
     }
