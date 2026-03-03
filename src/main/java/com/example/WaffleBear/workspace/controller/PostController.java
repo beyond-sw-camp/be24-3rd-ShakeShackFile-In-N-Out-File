@@ -1,7 +1,7 @@
 package com.example.WaffleBear.workspace.controller;
 
+import com.example.WaffleBear.workspace.model.post.WorkspaceDto;
 import com.example.WaffleBear.workspace.service.PostService;
-import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.UserRepository;
 import com.example.WaffleBear.user.model.AuthUserDetails;
@@ -23,14 +23,16 @@ public class PostController {
     @PostMapping("/save")
     public BaseResponse save(
             @AuthenticationPrincipal AuthUserDetails user,
-            @ModelAttribute PostDto.ReqPost dto) {
+            @ModelAttribute WorkspaceDto.ReqPost dto) {
 
-//        String email = user.getEmail();
-//        User writer = ur.findByEmail(email).orElseThrow(
-//                () -> new RuntimeException("사용자를 찾을수 없습니다.")
-//        );
+        String email = user.getEmail();
+        System.out.println(user.getIdx());
+        System.out.println(email);
+        User writer = ur.findByEmail(email).orElseThrow(
+                () -> new RuntimeException("사용자를 찾을수 없습니다.")
+        );
 
-        PostDto.ResPost result =  ps.save(dto);
+        WorkspaceDto.ResPost result =  ps.save(dto, writer);
 
         return BaseResponse.success(ResponseEntity.ok(result));
     }
@@ -50,7 +52,7 @@ public class PostController {
             @AuthenticationPrincipal AuthUserDetails user) {
 
         Long check_user = user.getIdx();
-        List<PostDto.ResList> result = ps.list(check_user);
+        List<WorkspaceDto.ResList> result = ps.list(check_user);
 
         return BaseResponse.success(ResponseEntity.ok(result));
     }

@@ -1,5 +1,4 @@
-package com.example.WaffleBear.Config.Filter;
-
+package com.example.WaffleBear.config.Filter;
 
 import com.example.WaffleBear.user.model.AuthUserDetails;
 
@@ -32,7 +31,8 @@ public class JwtFilter extends OncePerRequestFilter {
 
         return path.startsWith("/login") ||
                 path.startsWith("/user/signup") ||
-                path.startsWith("/user/verify");
+                path.startsWith("/user/verify") ||
+                path.startsWith("/api/workspace/save");
 
     }
 

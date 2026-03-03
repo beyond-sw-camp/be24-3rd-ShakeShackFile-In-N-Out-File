@@ -1,6 +1,5 @@
 package com.example.WaffleBear.workspace.model.post;
 
-import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
 import jakarta.persistence.*;
 import lombok.*;
@@ -13,7 +12,7 @@ import java.util.List;
 @Builder
 @Getter
 @Entity
-public class Post {
+public class Workspace {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
