@@ -1,7 +1,7 @@
-package com.example.WaffleBear.config;
+package com.example.WaffleBear.Config;
 
-import com.example.WaffleBear.config.Filter.JwtFilter;
-import com.example.WaffleBear.config.Filter.LoginFilter;
+import com.example.WaffleBear.Config.Filter.JwtFilter;
+import com.example.WaffleBear.Config.Filter.LoginFilter;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
