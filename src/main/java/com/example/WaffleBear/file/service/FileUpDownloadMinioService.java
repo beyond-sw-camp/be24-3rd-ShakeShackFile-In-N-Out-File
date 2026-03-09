@@ -37,6 +37,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
 
 
     private static final long MAX_SIZE_BYTES = 5L * 1024 * 1024 * 1024; // 5GB
+    private static final long SPLIT_MAX_SIZE = 100L * 1024 * 1024;
 
     // @PostConstruct는 스프링이 이 클래스를 다 만들고 나서 앱 시작후 자동으로 1번 실행하라는 것, 서버 켜질때 자동으로 실행되는 초기화 임 그래서 어디서 사용하지 않아도 자동으로 실행 됨
     @PostConstruct
@@ -80,6 +81,11 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         for (FileInfoDto.FileReq req : requests) {
             // 내부 함수 validate실행 : 변수로 받은 파일의 이상을 확인 ( 파일이 비었는지, 파일 이름이 없는지, 파일의 이름이 너무 긴지, 파일의 사이즈 너무 큰지 )
             validate(req);
+
+            // Todo: 사이즈가 100이 넘으면 분리하도록 하는 로직 설정
+            if(req.getFileSize()>SPLIT_MAX_SIZE){
+
+            }
             // 오리진 네임 변수에 실제 파일 이름 구하기, 공백 제거
             String fileOriginName = req.getFileOriginName().trim();
             // 포멧 변수에 확장자를 구하기: 확장자를 구하는 함수
