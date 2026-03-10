@@ -4,7 +4,7 @@ import com.example.WaffleBear.chat.model.dto.ChatParticipantsDto;
 import com.example.WaffleBear.chat.model.dto.ChatRoomsDto;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
-import com.example.WaffleBear.user.UserRepository;
+import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.User;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
