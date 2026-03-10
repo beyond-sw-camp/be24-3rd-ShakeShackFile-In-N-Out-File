@@ -23,7 +23,7 @@ public class PostController {
     @PostMapping("/save")
     public BaseResponse save(
             @AuthenticationPrincipal AuthUserDetails user,
-            @ModelAttribute PostDto.ReqPost dto) {
+            @RequestBody PostDto.ReqPost dto) {
 
         String email = user.getEmail();
         User writer = ur.findByEmail(email).orElseThrow(
@@ -41,9 +41,12 @@ public class PostController {
             @PathVariable("idx") Long post_idx) {
 
         Long check_user = user.getIdx();
-        ps.read(post_idx, check_user);
+        PostDto.ResPost result = ps.read(post_idx, check_user);
+        System.out.println(post_idx);
+        System.out.println(result.getTitle());
+        System.out.println(result.getContents());
 
-        return BaseResponse.success(ResponseEntity.ok("Read 성공"));
+        return BaseResponse.success(ResponseEntity.ok(result));
     }
     @GetMapping("/list")
     public BaseResponse read(
