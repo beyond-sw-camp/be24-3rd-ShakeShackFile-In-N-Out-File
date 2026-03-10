@@ -2,10 +2,11 @@ package com.example.WaffleBear.user.service;
 
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
-import com.example.WaffleBear.user.repository.EmailVerifyRepository;
+import com.example.WaffleBear.email.EmailVerifyRepository;
+import com.example.WaffleBear.email.EmailVerifyService;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.AuthUserDetails;
-import com.example.WaffleBear.user.model.EmailVerify;
+import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.model.UserDto;
 import lombok.RequiredArgsConstructor;
@@ -28,12 +29,10 @@ public class UserService implements UserDetailsService {
     private final EmailVerifyService emailVerifyService;
 
     public UserDto.SignupRes signup(UserDto.SignupReq dto) {
-
         // IDX 증가 때문에 추가함
         if(userRepository.findByEmail(dto.email()).isPresent()) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
         }
-
 
         User user = dto.toEntity();
         user.setPassword(passwordEncoder.encode(dto.password()));
