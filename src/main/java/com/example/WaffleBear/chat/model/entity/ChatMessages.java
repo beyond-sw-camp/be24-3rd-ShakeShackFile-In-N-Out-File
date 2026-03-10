@@ -1,7 +1,7 @@
 package com.example.WaffleBear.chat.model.entity;
 
 
-import com.example.WaffleBear.user.model.Users;
+import com.example.WaffleBear.user.model.User;
 import jakarta.persistence.*;
 import jakarta.persistence.Entity;
 import lombok.AllArgsConstructor;
@@ -27,7 +27,7 @@ public class ChatMessages {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "users_idx")
-    private Users sender;
+    private User sender;
 
     private String contents;
     private LocalDateTime sendTime;
