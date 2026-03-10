@@ -1,11 +1,7 @@
-<<<<<<<< HEAD:src/main/java/com/example/WaffleBear/workspace/controller/PostController.java
 package com.example.WaffleBear.workspace.controller;
 
+import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.service.PostService;
-========
-package com.example.WaffleBear.workspace;
-
->>>>>>>> fcdc92f ([Refactor] Posts => workspace로 수정):src/main/java/com/example/WaffleBear/workspace/PostController.java
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.repository.UserRepository;
@@ -29,19 +25,12 @@ public class PostController {
             @AuthenticationPrincipal AuthUserDetails user,
             @ModelAttribute PostDto.ReqPost dto) {
 
-<<<<<<<< HEAD:src/main/java/com/example/WaffleBear/workspace/controller/PostController.java
-//        String email = user.getEmail();
-//        User writer = ur.findByEmail(email).orElseThrow(
-//                () -> new RuntimeException("사용자를 찾을수 없습니다.")
-//        );
 
-========
         String email = user.getEmail();
         User writer = ur.findByEmail(email).orElseThrow(
                 () -> new RuntimeException("사용자를 찾을수 없습니다.")
         );
-        dto.setUser(writer);
->>>>>>>> fcdc92f ([Refactor] Posts => workspace로 수정):src/main/java/com/example/WaffleBear/workspace/PostController.java
+//        dto.setUser(writer);
         PostDto.ResPost result =  ps.save(dto);
 
         return BaseResponse.success(ResponseEntity.ok(result));
