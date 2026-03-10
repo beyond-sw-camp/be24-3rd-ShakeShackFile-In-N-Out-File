@@ -1,6 +1,5 @@
 package com.example.WaffleBear.workspace.controller;
 
-import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.service.PostService;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
@@ -25,12 +24,11 @@ public class PostController {
             @AuthenticationPrincipal AuthUserDetails user,
             @ModelAttribute PostDto.ReqPost dto) {
 
+//        String email = user.getEmail();
+//        User writer = ur.findByEmail(email).orElseThrow(
+//                () -> new RuntimeException("사용자를 찾을수 없습니다.")
+//        );
 
-        String email = user.getEmail();
-        User writer = ur.findByEmail(email).orElseThrow(
-                () -> new RuntimeException("사용자를 찾을수 없습니다.")
-        );
-//        dto.setUser(writer);
         PostDto.ResPost result =  ps.save(dto);
 
         return BaseResponse.success(ResponseEntity.ok(result));
