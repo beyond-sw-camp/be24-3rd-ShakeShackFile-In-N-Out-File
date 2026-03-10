@@ -70,7 +70,7 @@ public class ChatRoomService {
 
         return ChatRoomsDto.PageRes.from(result);
     }
-    public void delete(Long idx) {
+    public void exit(Long idx) {
         chatRoomRepository.deleteById(idx);
     }
 
