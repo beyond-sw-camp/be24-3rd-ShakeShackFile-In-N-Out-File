@@ -19,12 +19,12 @@ public class PostService {
     private final PostRepository pr;
     private final UserPostRepository upr;
 
-    public PostDto.ResPost save(PostDto.ReqPost dto) {
+    public PostDto.ResPost save(PostDto.ReqPost dto, User user) {
 
         Post result = dto.toEntity();
         result = pr.save(result);
 
-        upr.save(new UserPostDto.ReqUserPost().toEntity(result));
+        upr.save(new UserPostDto.ReqUserPost().toEntity(result, user));
 
         return PostDto.ResPost.from(result);
     }
