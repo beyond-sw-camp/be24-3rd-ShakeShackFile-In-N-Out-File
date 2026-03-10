@@ -3,9 +3,11 @@ package com.example.WaffleBear.file.service;
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.file.FileUpDownloadRepository;
-import com.example.WaffleBear.Config.MinioProperties;
+import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.file.model.FileInfo;
 import com.example.WaffleBear.file.model.FileInfoDto;
+import com.example.WaffleBear.user.model.AuthUserDetails;
+import com.example.WaffleBear.user.model.User;
 import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
@@ -13,6 +15,9 @@ import io.minio.MinioClient;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -29,9 +34,10 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
 
-    private String nowPath = "/";
+
 
     private static final long MAX_SIZE_BYTES = 5L * 1024 * 1024 * 1024; // 5GB
+    private static final long SPLIT_MAX_SIZE = 100L * 1024 * 1024;
 
     // @PostConstruct는 스프링이 이 클래스를 다 만들고 나서 앱 시작후 자동으로 1번 실행하라는 것, 서버 켜질때 자동으로 실행되는 초기화 임 그래서 어디서 사용하지 않아도 자동으로 실행 됨
     @PostConstruct
@@ -75,14 +81,34 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         for (FileInfoDto.FileReq req : requests) {
             // 내부 함수 validate실행 : 변수로 받은 파일의 이상을 확인 ( 파일이 비었는지, 파일 이름이 없는지, 파일의 이름이 너무 긴지, 파일의 사이즈 너무 큰지 )
             validate(req);
+
+            // Todo: 사이즈가 100이 넘으면 분리하도록 하는 로직 설정
+            if(req.getFileSize()>SPLIT_MAX_SIZE){
+
+            }
             // 오리진 네임 변수에 실제 파일 이름 구하기, 공백 제거
             String fileOriginName = req.getFileOriginName().trim();
             // 포멧 변수에 확장자를 구하기: 확장자를 구하는 함수
             String fileFormat = normalizeFormat(req);
             // 파일이 중복으로 저장안되고 구분해서 저장할 수 있도록 이름 랜덤화 및
-            String fileSaveName = buildObjectUrl() + UUID.randomUUID() + "." + fileFormat;
+            String fileSaveName = UUID.randomUUID() + "." + fileFormat;
 
+            // buildObjectUrl() +
             // String savePath = req.getObjectUrl();
+
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Long userIdx = 0L;
+            if (authentication != null && authentication.getPrincipal() instanceof AuthUserDetails) {
+                // Principal을 커스텀 클래스로 캐스팅
+                AuthUserDetails userDetails = (AuthUserDetails) authentication.getPrincipal();
+
+                // 객체 내부에 미리 보관해둔 idx 획득
+                userIdx = userDetails.getIdx();
+
+                // 획득한 userIdx 사용 로직
+            }
+
+            String basicPath ="/" + userIdx + "/";
 
             // DB에 저장될 파일 내용
             // 자동 기입 : IDX, 업로드 주제, 업로드 날짜, 수정날짜
@@ -92,19 +118,25 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
             // 4. 파일 사이즈
             // 5. 파일 잠금 여부
             // 6. 파일 공유 여부
+
             FileInfo entity = FileInfo.builder()
                     .fileOriginName(fileOriginName)
                     .fileFormat(fileFormat)
                     .fileSaveName(fileSaveName)
+                    .fileSavePath(basicPath+fileSaveName)
                     .fileSize(req.getFileSize())
                     .lockedFile(false)
                     .sharedFile(false)
+                    .user(User.builder()
+                            .idx(userIdx)
+                            .build())
                     .build();
+
 
             // 완성한 엔티티로 DB에 값 넣기
             FileInfo saved = fileUpDownloadRepository.save(entity);
             // 업로드 URL 발급
-            String uploadUrl = generatePresignedUploadUrl(fileSaveName);
+            String uploadUrl = generatePresignedUploadUrl(basicPath+fileSaveName);
 
             // 클라이언트로 반환할 내용
             // 1. 업로드 된 파일명
