@@ -8,6 +8,8 @@ import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.User;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
@@ -58,5 +60,18 @@ public class ChatRoomService {
 
             participantsRepository.saveAll(participants);
         }
+
+    public ChatRoomsDto.PageRes list(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+
+        // 페이징 처리 ⭕, 페이지 번호가 필요하다 => Page 반환
+        // 페이징 처리 ⭕, 페이지 번호가 필요없다. => Slice 반환
+        Page<ChatRooms> result = chatRoomRepository.findAll(pageRequest);
+
+        return ChatRoomsDto.PageRes.from(result);
+    }
+    public void delete(Long idx) {
+        chatRoomRepository.deleteById(idx);
+    }
 
 }
