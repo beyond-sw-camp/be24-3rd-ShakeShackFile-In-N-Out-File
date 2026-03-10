@@ -32,12 +32,11 @@ public class SecurityConfig {
     private final OAuth2UserService oAuth2UserService;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final OAuth2AuthorizationRequestRepository oAuth2AuthorizationRequestRepository;
+
     @Bean
     public SecurityFilterChain config(HttpSecurity http) throws Exception {
-        // 1. CORS 설정 적용 (이게 빠져있었습니다!)
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
-        // 2. CSRF, FormLogin 등 비활성화
         http.csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable);
@@ -51,20 +50,15 @@ public class SecurityConfig {
             );
             config.successHandler(oAuth2AuthenticationSuccessHandler);
         });
-        // 3. 인가(Authorization) 설정
+
+        // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
-                // 로그인, 회원가입 등은 누구나 접근 가능
-                .requestMatchers("/user/**","/workspace/**", "/login", "/api/login", "/error","/file/**").permitAll()
-                // 나머지 요청(특히 /board/save 등)은 반드시 인증 필요
+                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/api/auth/reissue").permitAll()
                 .anyRequest().authenticated()
         );
 
-        // 4. 필터 순서 설정
-        // jwtFilter가 먼저 실행되어 쿠키를 확인하고 인증 객체를 만들어야 합니다.
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-        // 그 다음 로그인 필터(ID/PW 검증)가 위치합니다.
-        http.addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class);
-
+        http.addFilterBefore(loginFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
@@ -75,7 +69,9 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of("http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Set-Cookie", "ATOKEN"));
+
+        // 핵심: 클라이언트(Axios)가 읽을 수 있도록 Authorization 헤더를 명시적으로 노출
+        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

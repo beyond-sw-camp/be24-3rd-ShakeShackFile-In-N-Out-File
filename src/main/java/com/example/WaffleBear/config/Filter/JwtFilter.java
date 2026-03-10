@@ -1,13 +1,10 @@
 package com.example.WaffleBear.config.Filter;
 
-
 import com.example.WaffleBear.user.model.AuthUserDetails;
-
-
 import com.example.WaffleBear.utils.JwtUtil;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,61 +16,82 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getServletPath();
-        System.out.println(path);
-
+        // 로그인, 회원가입, 재발급 등 토큰 검증이 필요 없는 경로는 필터를 건너뜀
         return path.startsWith("/login") ||
+                path.startsWith("/auth/reissue") ||
                 path.startsWith("/user/signup") ||
-                path.startsWith("/user/verify");
-
+                path.startsWith("/user/verify") ||
+                path.startsWith("/oauth2") ||
+                path.startsWith("/login/oauth2");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        if (request.getCookies() != null) {
-            for (Cookie cookie : request.getCookies()) {
-                if ("ATOKEN".equals(cookie.getName())) {
-                    String token = cookie.getValue();
 
-                    // 🔥 토큰이 비어있지 않고 유효한지 검증하는 로직 추가 필요
-                    if (token != null && !token.isEmpty()) {
-                        try {
-                            Long idx = jwtUtil.getUserIdx(token);
-                            String email = jwtUtil.getEmail(token);
-                            String role = jwtUtil.getRole(token);
+        // 1. 헤더에서 Authorization 키를 찾음
+        String authorization = request.getHeader("Authorization");
 
-                            AuthUserDetails user =AuthUserDetails.builder()
-                                    .idx(idx)
-                                    .email(email)
-                                    .role(role)
-                                    .build();
-
-                            if (user != null && role != null) {
-                                Authentication authentication = new UsernamePasswordAuthenticationToken(
-                                        user,
-                                        null,
-                                        List.of(new SimpleGrantedAuthority(role))
-                                );
-                                SecurityContextHolder.getContext().setAuthentication(authentication);
-                            }
-                        } catch (Exception e) {
-                            // 토큰 파싱 중 에러 발생 시 로그 출력 (만료 등)
-                            logger.error("JWT 검증 실패: " + e.getMessage());
-                        }
-                    }
-                }
-            }
+        // 2. Authorization 헤더가 없거나 Bearer 접두사가 아니면 검증 종료 (다음 필터로)
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
         }
+
+        // 3. "Bearer " 부분을 제거하고 순수 토큰 문자열만 추출
+        String token = authorization.split(" ")[1];
+
+        // 4. 토큰 소멸 시간 검증
+        try {
+            jwtUtil.isExpired(token);
+        } catch (ExpiredJwtException e) {
+            // 프론트엔드가 토큰 만료를 인지하고 재발급 API를 호출할 수 있도록 401 응답
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            PrintWriter writer = response.getWriter();
+            writer.print("{\"error\": \"access token expired\"}");
+            return;
+        }
+
+        // 5. 토큰 카테고리 검증 (access 토큰이 맞는지)
+        String category = jwtUtil.getCategory(token);
+        if (!category.equals("access")) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            PrintWriter writer = response.getWriter();
+            writer.print("{\"error\": \"invalid token category\"}");
+            return;
+        }
+
+        // 6. 정상 토큰이면 값 추출 후 SecurityContextHolder에 인증 정보 저장
+        Long idx = jwtUtil.getUserIdx(token);
+        String email = jwtUtil.getEmail(token);
+        String role = jwtUtil.getRole(token);
+
+        AuthUserDetails user = AuthUserDetails.builder()
+                .idx(idx)
+                .email(email)
+                .role(role)
+                .build();
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user,
+                null,
+                List.of(new SimpleGrantedAuthority(role))
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        // 다음 필터로 요청 전달
         filterChain.doFilter(request, response);
     }
 }
-
-
