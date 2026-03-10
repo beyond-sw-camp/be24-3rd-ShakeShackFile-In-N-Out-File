@@ -1,4 +1,4 @@
-package com.example.WaffleBear.user.model;
+package com.example.WaffleBear.email;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
