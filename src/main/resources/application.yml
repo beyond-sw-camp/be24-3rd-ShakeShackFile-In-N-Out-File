@@ -1,5 +1,3 @@
-server:
-  port: 9320
 
 jwt:
   key: ${JWT_KEY}
