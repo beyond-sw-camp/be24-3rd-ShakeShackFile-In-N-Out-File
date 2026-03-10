@@ -1,4 +1,4 @@
-package com.example.WaffleBear.user.service;
+package com.example.WaffleBear.email;
 
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
