@@ -1,9 +1,9 @@
 package com.example.WaffleBear.user.service;
 
+import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.model.UserDto;
-import com.example.WaffleBear.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;

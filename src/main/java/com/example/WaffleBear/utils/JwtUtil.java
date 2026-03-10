@@ -15,49 +15,80 @@ public class JwtUtil {
 
     private SecretKey encodeKey;
 
-    @Value("${jwt.expire}")
-    private int expire;
+    // 더 이상 사용하지 않는 expire 필드는 삭제함
 
     public JwtUtil(@Value("${jwt.key}") String key) {
         this.encodeKey = Keys.hmacShaKeyFor(Decoders.BASE64URL.decode(key));
     }
-    public String createToken(Long idx, String email, String role) {
-        System.out.println(email);
-        String jwt = Jwts.builder()
+
+    public String createToken(String category, Long idx, String email, String name, String role, Long expiredMs) {
+        return Jwts.builder()
+                .claim("category", category) // "access" 또는 "refresh"
                 .claim("idx", idx)
                 .claim("email", email)
                 .claim("role", role)
-                .issuedAt(new Date()).expiration(new Date(System.currentTimeMillis()+expire)).signWith(encodeKey).compact();
-
-        return jwt;
+                .claim("name", name)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                // 치명적 버그 수정: 주입받은 expire 대신 파라미터로 받은 expiredMs 사용
+                .expiration(new Date(System.currentTimeMillis() + expiredMs))
+                .signWith(encodeKey)
+                .compact();
     }
+
     public Long getUserIdx(String token) {
-        Claims claims = Jwts.parser()
+        return Jwts.parser()
                 .verifyWith(encodeKey)
                 .build()
                 .parseSignedClaims(token)
-                .getPayload();
-
-        return claims.get("idx", Long.class);
+                .getPayload()
+                .get("idx", Long.class);
     }
 
     public String getEmail(String token) {
-        Claims claims = Jwts.parser()
+        return Jwts.parser()
                 .verifyWith(encodeKey)
                 .build()
                 .parseSignedClaims(token)
-                .getPayload();
+                .getPayload()
+                .get("email", String.class);
+    }
 
-        return claims.get("email", String.class);
+    public String getName(String token) {
+        return Jwts.parser()
+                .verifyWith(encodeKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("name", String.class);
     }
 
     public String getRole(String token) {
-        Claims claims = Jwts.parser()
+        return Jwts.parser()
                 .verifyWith(encodeKey)
                 .build()
                 .parseSignedClaims(token)
-                .getPayload();
+                .getPayload()
+                .get("role", String.class);
+    }
 
-        return claims.get("role", String.class);
+    // 신규 추가: 토큰 카테고리(access/refresh) 추출 메서드
+    public String getCategory(String token) {
+        return Jwts.parser()
+                .verifyWith(encodeKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("category", String.class);
+    }
+
+    // 신규 추가: 토큰 만료 여부 검증 메서드
+    public Boolean isExpired(String token) {
+        return Jwts.parser()
+                .verifyWith(encodeKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration()
+                .before(new Date());
     }
 }

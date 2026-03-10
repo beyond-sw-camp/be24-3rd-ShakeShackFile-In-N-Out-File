@@ -28,6 +28,7 @@ public class AuthUserDetails implements UserDetails, OAuth2User {
         return AuthUserDetails.builder()
                 .idx(entity.getIdx())
                 .email(entity.getEmail())
+                .name(entity.getName())
                 .password(entity.getPassword())
                 .enable(entity.getEnable())
                 .role(entity.getRole())
