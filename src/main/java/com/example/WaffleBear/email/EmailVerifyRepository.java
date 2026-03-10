@@ -1,6 +1,5 @@
-package com.example.WaffleBear.user.repository;
+package com.example.WaffleBear.email;
 
-import com.example.WaffleBear.user.model.EmailVerify;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
