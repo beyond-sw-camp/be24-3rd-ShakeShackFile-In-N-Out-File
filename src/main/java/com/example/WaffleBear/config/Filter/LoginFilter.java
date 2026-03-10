@@ -1,11 +1,13 @@
 package com.example.WaffleBear.config.Filter;
 
+import com.example.WaffleBear.user.model.TokenDto;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.UserDto;
-import com.example.WaffleBear.utils.JwtUtil;
+import com.example.WaffleBear.user.service.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,19 +18,21 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+
 
 @Component
 public class LoginFilter extends UsernamePasswordAuthenticationFilter {
     private final AuthenticationManager authenticationManager;
-    private final JwtUtil jwtUtil;
+    private final AuthService authService;
 
     public LoginFilter(
             AuthenticationManager authenticationManager,
-            JwtUtil jwtUtil) {
+            AuthService authService) {
 
         super(authenticationManager);
         this.authenticationManager = authenticationManager;
-        this.jwtUtil = jwtUtil;
+        this.authService = authService;
     }
 
     @Override
@@ -38,10 +42,21 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
             FilterChain chain,
             Authentication authResult) throws IOException, ServletException {
 
-        System.out.println("로그인 성공했을 때 실행");
         AuthUserDetails user = (AuthUserDetails) authResult.getPrincipal();
-        String token = jwtUtil.createToken(user.getIdx(), user.getEmail(), user.getRole());
-        response.setHeader("Set-Cookie", "ATOKEN=" + token + "; Path=/");
+
+        // 1. 서비스 계층에 비즈니스 로직 위임
+        TokenDto.AuthTokenResponse tokens = authService.issueTokens(user.getIdx(), user.getEmail(), user.getName(), user.getRole());
+
+        // 2. HTTP 응답 제어 (Access Token -> Header)
+        response.setHeader("Authorization", "Bearer " + tokens.accessToken());
+
+        // 3. HTTP 응답 제어 (Refresh Token -> HttpOnly Cookie)
+        Cookie refreshCookie = new Cookie("refresh", tokens.refreshToken());
+        refreshCookie.setMaxAge(14 * 24 * 60 * 60);
+        refreshCookie.setHttpOnly(true);
+        refreshCookie.setPath("/");
+        // refreshCookie.setSecure(true); // 운영 환경(HTTPS)에서는 필수 활성화
+        response.addCookie(refreshCookie);
     }
 
     @Override
