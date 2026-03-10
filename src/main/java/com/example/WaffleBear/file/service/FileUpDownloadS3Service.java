@@ -77,6 +77,11 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
     }
 
     @Override
+    public FileInfoDto.CompleteRes completeUpload(FileInfoDto.CompleteReq request) {
+        return null;
+    }
+
+    @Override
     public FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto) {
         throw new UnsupportedOperationException("S3 service currently supports presigned upload only.");
     }

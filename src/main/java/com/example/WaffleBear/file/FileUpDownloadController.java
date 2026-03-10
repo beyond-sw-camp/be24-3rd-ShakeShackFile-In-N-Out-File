@@ -19,20 +19,18 @@ public class FileUpDownloadController {
     @PostMapping("/upload")
     public ResponseEntity<List<FileInfoDto.FileRes>> fileUpload(
             @AuthenticationPrincipal AuthUserDetails dto,
-            @RequestBody List<FileInfoDto.FileReq> files){
+            @RequestBody List<FileInfoDto.FileReq> files) {
         List<FileInfoDto.FileRes> result = fileUpDownloadService.fileUpload(files);
 
         return ResponseEntity.ok(result);
     }
 
-//    @PostMapping("/download")
-//    public ResponseEntity<List<FileInfoDto.FileRes>> fileDownload(@RequestBody List<FileInfoDto.FileReq> files){
-//        List<FileInfoDto.FileRes> result = fileUpDownloadService.fileDownload(files);
+    @PostMapping("/upload/complete")
+    public ResponseEntity<FileInfoDto.CompleteRes> completeUpload(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @RequestBody FileInfoDto.CompleteReq request) {
+        FileInfoDto.CompleteRes result = fileUpDownloadService.completeUpload(request);
 
-//        return ResponseEntity.ok(result);
-//    }
-
-//    @GetMapping("/list")
-//    public ResponseEntity<List<FileInfoDto.>>
-
+        return ResponseEntity.ok(result);
+    }
 }
