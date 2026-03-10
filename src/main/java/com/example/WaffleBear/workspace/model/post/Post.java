@@ -26,7 +26,7 @@ public class Post {
 
     @Column(nullable = false)
     private String title;
-    @Column(columnDefinition = "json", nullable = false)
+    @Column(columnDefinition = "LONGTEXT", nullable = false)
     private String contents;
 
     @Column(nullable = false, updatable = false)
