@@ -69,6 +69,11 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
     }
 
     @Override
+    public FileInfoDto.CompleteRes completeUpload(FileInfoDto.CompleteReq request) {
+        return null;
+    }
+
+    @Override
     public FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto) {
         String targetName = sanitizeFileName(dto == null ? null : dto.getFileOriginName());
         Path filePath = findLatestFileByName(targetName);
