@@ -140,6 +140,11 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
         throw new UnsupportedOperationException("Local service currently does not support storage summary operations.");
     }
 
+    @Override
+    public FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support text preview operations.");
+    }
+
     private FileInfoDto.FileRes buildResponse(FileInfo saved, Path targetPath) {
         return FileInfoDto.FileRes.builder()
 //                .fileIdx(saved.getIdx())

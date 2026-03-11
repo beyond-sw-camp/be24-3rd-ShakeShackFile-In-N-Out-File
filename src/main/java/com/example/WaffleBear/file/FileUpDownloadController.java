@@ -142,4 +142,14 @@ public class FileUpDownloadController {
 
         return ResponseEntity.ok(result);
     }
+
+    @GetMapping("/{fileIdx}/text-preview")
+    public ResponseEntity<FileInfoDto.TextPreviewRes> getTextPreview(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @PathVariable Long fileIdx) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.TextPreviewRes result = fileUpDownloadService.getTextPreview(userIdx, fileIdx);
+
+        return ResponseEntity.ok(result);
+    }
 }

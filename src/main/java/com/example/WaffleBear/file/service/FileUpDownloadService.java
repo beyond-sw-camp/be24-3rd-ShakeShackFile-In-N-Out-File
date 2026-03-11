@@ -30,4 +30,6 @@ public interface FileUpDownloadService {
     FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId);
 
     FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx);
+
+    FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx);
 }

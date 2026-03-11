@@ -136,6 +136,11 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
         throw new UnsupportedOperationException("S3 service currently does not support storage summary operations.");
     }
 
+    @Override
+    public FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("S3 service currently does not support text preview operations.");
+    }
+
     private String normalizeFormat(FileInfoDto.FileReq req) {
         String format = req.getFileFormat();
             if (format != null && !format.isBlank()) {
