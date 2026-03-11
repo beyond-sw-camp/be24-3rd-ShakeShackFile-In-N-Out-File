@@ -39,6 +39,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private static final long MAX_SIZE_BYTES = 5L * 1024 * 1024 * 1024; // 5GB
     private static final long PARTITION_SIZE_BYTES = 100L * 1024 * 1024; // 100MB
     private static final long CHUNK_SIZE_BYTES = 80L * 1024 * 1024; // 80MB
+    private static final long MIN_FINAL_PARTITION_SIZE_BYTES = 10L * 1024 * 1024; // 10MB
 
 //    @PostConstruct
 //    public void ensureBucketExists() {
@@ -185,7 +186,16 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         if (fileSize == null || fileSize <= 0) {
             return 1;
         }
-        return (int) ((fileSize + CHUNK_SIZE_BYTES - 1) / CHUNK_SIZE_BYTES);
+
+        long partitionCount = (fileSize + CHUNK_SIZE_BYTES - 1) / CHUNK_SIZE_BYTES;
+        long remainder = fileSize % CHUNK_SIZE_BYTES;
+
+        // Avoid creating a tiny tail partition; include it in the previous chunk instead.
+        if (partitionCount > 1 && remainder > 0 && remainder <= MIN_FINAL_PARTITION_SIZE_BYTES) {
+            return (int) (partitionCount - 1);
+        }
+
+        return (int) partitionCount;
     }
 
     private String buildPartitionObjectKey(
