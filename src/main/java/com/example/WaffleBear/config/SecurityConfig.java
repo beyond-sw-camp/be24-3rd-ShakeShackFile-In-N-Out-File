@@ -59,6 +59,10 @@ public class SecurityConfig {
 
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(loginFilter, UsernamePasswordAuthenticationFilter.class);
+        
+        // CORS 필터를 시큐리티 필터 체인 최상단에 배치
+        http.addFilterBefore(new org.springframework.web.filter.CorsFilter(corsConfigurationSource()), JwtFilter.class);
+        
         return http.build();
     }
 
@@ -66,7 +70,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowCredentials(true);
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 
