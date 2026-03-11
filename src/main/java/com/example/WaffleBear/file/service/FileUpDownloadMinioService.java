@@ -11,6 +11,7 @@ import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import io.minio.ComposeObjectArgs;
 import io.minio.ComposeSource;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectsArgs;
@@ -22,7 +23,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -50,6 +53,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private static final long BASIC_STORAGE_BYTES = 20L * 1024 * 1024 * 1024;
     private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
     private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
+    private static final int MAX_TEXT_PREVIEW_BYTES = 64 * 1024;
 
     @Override
     public List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests) {
@@ -430,6 +434,61 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .categories(categoryResponses)
                 .largestFiles(largestFiles)
                 .build();
+    }
+
+    @Override
+    public FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx) {
+        FileInfo file = getOwnedFile(userIdx, fileIdx);
+        if (resolveNodeType(file) != FileNodeType.FILE) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        if (!isTextPreviewable(file.getFileFormat())) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        String objectKey = file.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        try (var objectStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(minioProperties.getBucket_cloud())
+                        .object(objectKey)
+                        .build()
+        )) {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int totalRead = 0;
+            boolean truncated = false;
+            int read;
+
+            while ((read = objectStream.read(buffer)) != -1) {
+                int writable = Math.min(read, MAX_TEXT_PREVIEW_BYTES - totalRead);
+                if (writable > 0) {
+                    outputStream.write(buffer, 0, writable);
+                    totalRead += writable;
+                }
+
+                if (totalRead >= MAX_TEXT_PREVIEW_BYTES) {
+                    truncated = true;
+                    break;
+                }
+            }
+
+            return FileInfoDto.TextPreviewRes.builder()
+                    .idx(file.getIdx())
+                    .fileOriginName(file.getFileOriginName())
+                    .fileFormat(file.getFileFormat())
+                    .contentType(resolveTextContentType(file.getFileFormat()))
+                    .content(outputStream.toString(StandardCharsets.UTF_8))
+                    .truncated(truncated)
+                    .fileSize(file.getFileSize())
+                    .build();
+        } catch (Exception e) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
     }
 
     private Long resolveUserIdx() {
@@ -950,6 +1009,38 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
 
         return "other";
+    }
+
+    private boolean isTextPreviewable(String fileFormat) {
+        String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
+
+        return Set.of(
+                "txt", "md", "csv", "log", "json", "xml", "html", "htm",
+                "css", "js", "ts", "java", "py", "sql", "yml", "yaml",
+                "properties", "sh", "bat"
+        ).contains(extension);
+    }
+
+    private String resolveTextContentType(String fileFormat) {
+        String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
+
+        if (Set.of("json").contains(extension)) {
+            return "application/json";
+        }
+
+        if (Set.of("html", "htm").contains(extension)) {
+            return "text/html";
+        }
+
+        if (Set.of("xml").contains(extension)) {
+            return "application/xml";
+        }
+
+        if (Set.of("csv").contains(extension)) {
+            return "text/csv";
+        }
+
+        return "text/plain";
     }
 
     private FileInfoDto.StorageCategoryRes toStorageCategoryResponse(

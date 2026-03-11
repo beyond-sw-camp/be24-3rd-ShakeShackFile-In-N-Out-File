@@ -213,4 +213,19 @@ public class FileInfoDto {
         private List<StorageCategoryRes> categories;
         private List<StorageTopFileRes> largestFiles;
     }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class TextPreviewRes {
+        private Long idx;
+        private String fileOriginName;
+        private String fileFormat;
+        private String contentType;
+        private String content;
+        private Boolean truncated;
+        private Long fileSize;
+    }
 }
