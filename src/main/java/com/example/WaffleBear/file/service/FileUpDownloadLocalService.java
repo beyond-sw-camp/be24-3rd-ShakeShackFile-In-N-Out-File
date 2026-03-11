@@ -115,6 +115,31 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
         throw new UnsupportedOperationException("Local service currently does not support trash operations.");
     }
 
+    @Override
+    public FileInfoDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId) {
+        throw new UnsupportedOperationException("Local service currently does not support move operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName) {
+        throw new UnsupportedOperationException("Local service currently does not support rename operations.");
+    }
+
+    @Override
+    public FileInfoDto.FolderPropertyRes getFolderProperties(Long userIdx, Long folderIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support folder property operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId) {
+        throw new UnsupportedOperationException("Local service currently does not support batch move operations.");
+    }
+
+    @Override
+    public FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support storage summary operations.");
+    }
+
     private FileInfoDto.FileRes buildResponse(FileInfo saved, Path targetPath) {
         return FileInfoDto.FileRes.builder()
 //                .fileIdx(saved.getIdx())

@@ -111,6 +111,31 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
         throw new UnsupportedOperationException("S3 service currently does not support trash operations.");
     }
 
+    @Override
+    public FileInfoDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId) {
+        throw new UnsupportedOperationException("S3 service currently does not support move operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName) {
+        throw new UnsupportedOperationException("S3 service currently does not support rename operations.");
+    }
+
+    @Override
+    public FileInfoDto.FolderPropertyRes getFolderProperties(Long userIdx, Long folderIdx) {
+        throw new UnsupportedOperationException("S3 service currently does not support folder property operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId) {
+        throw new UnsupportedOperationException("S3 service currently does not support batch move operations.");
+    }
+
+    @Override
+    public FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx) {
+        throw new UnsupportedOperationException("S3 service currently does not support storage summary operations.");
+    }
+
     private String normalizeFormat(FileInfoDto.FileReq req) {
         String format = req.getFileFormat();
             if (format != null && !format.isBlank()) {
