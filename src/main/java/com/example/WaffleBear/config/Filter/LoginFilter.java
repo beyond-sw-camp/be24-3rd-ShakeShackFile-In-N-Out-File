@@ -52,7 +52,7 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
 
         // 3. HTTP 응답 제어 (Refresh Token -> HttpOnly Cookie)
         Cookie refreshCookie = new Cookie("refresh", tokens.refreshToken());
-        refreshCookie.setMaxAge(14 * 24 * 60 * 60);
+        refreshCookie.setMaxAge(14 * 24 * 60 * 6000000);
         refreshCookie.setHttpOnly(true);
         refreshCookie.setPath("/");
         // refreshCookie.setSecure(true); // 운영 환경(HTTPS)에서는 필수 활성화

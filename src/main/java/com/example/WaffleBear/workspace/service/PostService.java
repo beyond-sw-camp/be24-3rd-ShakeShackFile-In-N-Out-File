@@ -1,8 +1,10 @@
 package com.example.WaffleBear.workspace.service;
 
+import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.post.PostDto;
+import com.example.WaffleBear.workspace.model.relation.AccessRole;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
 import com.example.WaffleBear.workspace.model.relation.UserPostDto;
 import com.example.WaffleBear.workspace.repository.PostRepository;
@@ -12,6 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
+
+import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +55,19 @@ public class PostService {
             return PostDto.ResPost.from(result);
         }else {
             return null;
+        }
+    }
+    public Optional<BaseResponse> delete(Long post_idx, Long check_user) {
+
+        UserPost result = upr.findByUser_IdxAndWorkspace_Idx(check_user, post_idx).orElseThrow(
+                () -> new RuntimeException("권한이 없습니다.")
+        );
+        if(result.getLevel().equals(AccessRole.ADMIN)) {
+            pr.deleteById(post_idx);
+
+            return Optional.of(BaseResponse.success(SUCCESS));
+        }else {
+            return Optional.of(BaseResponse.fail(REQUEST_ERROR));
         }
     }
 

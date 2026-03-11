@@ -33,7 +33,8 @@ public class JwtFilter extends OncePerRequestFilter {
                 path.startsWith("/user/signup") ||
                 path.startsWith("/user/verify") ||
                 path.startsWith("/oauth2") ||
-                path.startsWith("/login/oauth2");
+                path.startsWith("/login/oauth2") ||
+                path.startsWith("/workspace/**");
     }
 
     @Override
@@ -44,12 +45,16 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 2. Authorization 헤더가 없거나 Bearer 접두사가 아니면 검증 종료 (다음 필터로)
         if (authorization == null || !authorization.startsWith("Bearer ")) {
+            System.out.println("DEBUG: Authorization 헤더가 없거나 형식이 틀림: " + authorization);
             filterChain.doFilter(request, response);
             return;
         }
 
         // 3. "Bearer " 부분을 제거하고 순수 토큰 문자열만 추출
-        String token = authorization.split(" ")[1];
+        String token = authorization.substring(7).trim();
+
+        // ★ 이 로그가 핵심입니다. 서버 콘솔(Log)에 뭐라고 찍히는지 확인해 보세요!
+        System.out.println("DEBUG: 추출된 순수 토큰 -> [" + token + "]");
 
         // 4. 토큰 소멸 시간 검증
         try {
