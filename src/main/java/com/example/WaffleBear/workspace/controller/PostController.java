@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RequestMapping("/workspace")
 @RequiredArgsConstructor
@@ -51,6 +52,18 @@ public class PostController {
 
         return BaseResponse.success(ResponseEntity.ok(result));
     }
+
+    @PostMapping("/delete/{idx}")
+    public BaseResponse delete(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable("idx") Long post_idx) {
+
+        Long check_user = user.getIdx();
+        Optional<BaseResponse>result = ps.delete(post_idx, check_user);
+
+        return BaseResponse.success(ResponseEntity.ok(result));
+    }
+
     @GetMapping("/list")
     public BaseResponse read(
             @AuthenticationPrincipal AuthUserDetails user) {

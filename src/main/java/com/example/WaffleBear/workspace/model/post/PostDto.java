@@ -39,7 +39,7 @@ public class PostDto {
             return ResPost.builder()
                     .idx(entity.getIdx())
                     .title(entity.getTitle())
-                    .contents(entity.getTitle())
+                    .contents(entity.getContents())
                     .build();
         }
     }
