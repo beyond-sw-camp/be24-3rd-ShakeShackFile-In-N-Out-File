@@ -372,7 +372,46 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileRes fileList(Long idx) {
-        return null;
+    public List<FileInfoDto.FileListItemRes> fileList(Long idx) {
+        Long userIdx = idx == null ? 0L : idx;
+
+        return fileUpDownloadRepository.findAllByUser_IdxOrderByLastModifyDateDescUploadDateDesc(userIdx)
+                .stream()
+                .map(this::toFileListItem)
+                .toList();
+    }
+
+    private FileInfoDto.FileListItemRes toFileListItem(FileInfo entity) {
+        return FileInfoDto.FileListItemRes.builder()
+                .idx(entity.getIdx())
+                .fileOriginName(entity.getFileOriginName())
+                .fileSaveName(entity.getFileSaveName())
+                .fileSavePath(entity.getFileSavePath())
+                .fileFormat(entity.getFileFormat())
+                .fileSize(entity.getFileSize())
+                .lockedFile(entity.isLockedFile())
+                .sharedFile(entity.isSharedFile())
+                .uploadDate(entity.getUploadDate())
+                .lastModifyDate(entity.getLastModifyDate())
+                .presignedDownloadUrl(generatePresignedDownloadUrl(entity.getFileSavePath()))
+                .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
+                .build();
+    }
+
+    private String generatePresignedDownloadUrl(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+
+        try {
+            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(minioProperties.getBucket_cloud())
+                    .object(objectKey)
+                    .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                    .build());
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
