@@ -23,6 +23,7 @@ public class FileInfoDto {
         private String fileFormat;
         private Long fileSize;
         private String contentType;
+        private Long parentId;
     }
 
     @Getter
@@ -54,6 +55,7 @@ public class FileInfoDto {
         private Long fileSize;
         private String finalObjectKey;
         private List<String> chunkObjectKeys;
+        private Long parentId;
     }
 
     @Getter
@@ -80,11 +82,36 @@ public class FileInfoDto {
         private String fileSavePath;
         private String fileFormat;
         private Long fileSize;
+        private String nodeType;
+        private Long parentId;
         private Boolean lockedFile;
         private Boolean sharedFile;
+        private Boolean trashed;
+        private LocalDateTime deletedAt;
         private LocalDateTime uploadDate;
         private LocalDateTime lastModifyDate;
         private String presignedDownloadUrl;
         private Integer presignedUrlExpiresIn;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class FolderReq {
+        private String folderName;
+        private Long parentId;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class FileActionRes {
+        private Long targetIdx;
+        private String action;
+        private Integer affectedCount;
     }
 }

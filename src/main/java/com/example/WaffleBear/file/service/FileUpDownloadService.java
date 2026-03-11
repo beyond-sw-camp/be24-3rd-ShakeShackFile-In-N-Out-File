@@ -12,4 +12,12 @@ public interface FileUpDownloadService {
     FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto);
 
     List<FileInfoDto.FileListItemRes> fileList(Long idx);
+
+    FileInfoDto.FileListItemRes createFolder(FileInfoDto.FolderReq request);
+
+    FileInfoDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx);
+
+    FileInfoDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx);
+
+    FileInfoDto.FileActionRes clearTrash(Long userIdx);
 }

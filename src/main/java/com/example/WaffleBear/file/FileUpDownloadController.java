@@ -42,4 +42,41 @@ public class FileUpDownloadController {
 
         return ResponseEntity.ok(result);
     }
+
+    @PostMapping("/folder")
+    public ResponseEntity<FileInfoDto.FileListItemRes> createFolder(
+            @RequestBody FileInfoDto.FolderReq request) {
+        FileInfoDto.FileListItemRes result = fileUpDownloadService.createFolder(request);
+
+        return ResponseEntity.ok(result);
+    }
+
+    @PatchMapping("/{fileIdx}/trash")
+    public ResponseEntity<FileInfoDto.FileActionRes> moveToTrash(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @PathVariable Long fileIdx) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileActionRes result = fileUpDownloadService.moveToTrash(userIdx, fileIdx);
+
+        return ResponseEntity.ok(result);
+    }
+
+    @DeleteMapping("/{fileIdx}")
+    public ResponseEntity<FileInfoDto.FileActionRes> deletePermanently(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @PathVariable Long fileIdx) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileActionRes result = fileUpDownloadService.deletePermanently(userIdx, fileIdx);
+
+        return ResponseEntity.ok(result);
+    }
+
+    @DeleteMapping("/trash")
+    public ResponseEntity<FileInfoDto.FileActionRes> clearTrash(
+            @AuthenticationPrincipal AuthUserDetails dto) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileActionRes result = fileUpDownloadService.clearTrash(userIdx);
+
+        return ResponseEntity.ok(result);
+    }
 }

@@ -95,6 +95,26 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
         return List.of();
     }
 
+    @Override
+    public FileInfoDto.FileListItemRes createFolder(FileInfoDto.FolderReq request) {
+        throw new UnsupportedOperationException("Local service currently does not support folder operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support trash operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support permanent delete operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes clearTrash(Long userIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support trash operations.");
+    }
+
     private FileInfoDto.FileRes buildResponse(FileInfo saved, Path targetPath) {
         return FileInfoDto.FileRes.builder()
 //                .fileIdx(saved.getIdx())
