@@ -1,5 +1,6 @@
 package com.example.WaffleBear.workspace.controller;
 
+import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.service.PostService;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
@@ -22,14 +23,14 @@ public class PostController {
     @PostMapping("/save")
     public BaseResponse save(
             @AuthenticationPrincipal AuthUserDetails user,
-            @ModelAttribute PostDto.ReqPost dto) {
+            @RequestBody PostDto.ReqPost dto) {
 
-//        String email = user.getEmail();
-//        User writer = ur.findByEmail(email).orElseThrow(
-//                () -> new RuntimeException("사용자를 찾을수 없습니다.")
-//        );
+        String email = user.getEmail();
+        User writer = ur.findByEmail(email).orElseThrow(
+                () -> new RuntimeException("사용자를 찾을수 없습니다.")
+        );
 
-        PostDto.ResPost result =  ps.save(dto);
+        PostDto.ResPost result =  ps.save(dto, writer);
 
         return BaseResponse.success(ResponseEntity.ok(result));
     }
@@ -40,9 +41,12 @@ public class PostController {
             @PathVariable("idx") Long post_idx) {
 
         Long check_user = user.getIdx();
-        ps.read(post_idx, check_user);
+        PostDto.ResPost result = ps.read(post_idx, check_user);
+        System.out.println(post_idx);
+        System.out.println(result.getTitle());
+        System.out.println(result.getContents());
 
-        return BaseResponse.success(ResponseEntity.ok("Read 성공"));
+        return BaseResponse.success(ResponseEntity.ok(result));
     }
     @GetMapping("/list")
     public BaseResponse read(

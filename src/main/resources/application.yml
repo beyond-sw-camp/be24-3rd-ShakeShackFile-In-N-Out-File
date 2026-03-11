@@ -1,3 +1,4 @@
+
 jwt:
   key: ${JWT_KEY}
   expire: ${JWT_EXPIRE}
@@ -80,8 +81,7 @@ minio:
   access-key: ${MINIO_NAME}
   secret-key: ${MINIO_SECRET}
   bucket_cloud: ${MINIO_CLOUD_BUCKET}
-  bucket_work: ${MINIO_WORKSPACE_BUCKET}
-  presigned-url-expiry-seconds: 600
+  presigned-url-expiry-seconds: 60000
 
 logging:
   level:
