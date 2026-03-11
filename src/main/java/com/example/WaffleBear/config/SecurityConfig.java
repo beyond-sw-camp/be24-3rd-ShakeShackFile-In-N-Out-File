@@ -53,7 +53,7 @@ public class SecurityConfig {
 
         // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/api/auth/reissue").permitAll()
+                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue").permitAll()
                 .anyRequest().authenticated()
         );
 
@@ -67,7 +67,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowCredentials(true);
         configuration.setAllowedOrigins(List.of("http://localhost:5173"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 
         // 핵심: 클라이언트(Axios)가 읽을 수 있도록 Authorization 헤더를 명시적으로 노출
