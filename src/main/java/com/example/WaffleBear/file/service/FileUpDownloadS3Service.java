@@ -91,6 +91,26 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
         return List.of();
     }
 
+    @Override
+    public FileInfoDto.FileListItemRes createFolder(FileInfoDto.FolderReq request) {
+        throw new UnsupportedOperationException("S3 service currently does not support folder operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("S3 service currently does not support trash operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("S3 service currently does not support permanent delete operations.");
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes clearTrash(Long userIdx) {
+        throw new UnsupportedOperationException("S3 service currently does not support trash operations.");
+    }
+
     private String normalizeFormat(FileInfoDto.FileReq req) {
         String format = req.getFileFormat();
             if (format != null && !format.isBlank()) {
