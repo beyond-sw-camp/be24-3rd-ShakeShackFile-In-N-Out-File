@@ -33,10 +33,14 @@ public class Post {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    @Column(nullable = false)
+    private boolean Type;
+
     @PrePersist
     public void setCreatedAt() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = createdAt;
+        this.Type = false;
     }
 
     public void update(String title, String contents) {

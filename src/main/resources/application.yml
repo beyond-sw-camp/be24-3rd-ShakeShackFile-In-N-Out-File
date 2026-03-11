@@ -1,3 +1,4 @@
+
 jwt:
   key: ${JWT_KEY}
   expire: ${JWT_EXPIRE}

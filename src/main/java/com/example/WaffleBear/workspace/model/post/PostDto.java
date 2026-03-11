@@ -44,11 +44,13 @@ public class PostDto {
     @Getter
     @Builder
     public static class ResList {
+        private Long post_idx;
         private String title;
         private LocalDateTime updatedAt;
 
         public static ResList from(Post entity) {
             return ResList.builder()
+                    .post_idx(entity.getIdx())
                     .title(entity.getTitle())
                     .updatedAt(entity.getUpdatedAt())
                     .build();
