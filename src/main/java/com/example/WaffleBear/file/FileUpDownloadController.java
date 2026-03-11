@@ -79,4 +79,67 @@ public class FileUpDownloadController {
 
         return ResponseEntity.ok(result);
     }
+
+    @PatchMapping("/{fileIdx}/move")
+    public ResponseEntity<FileInfoDto.FileActionRes> moveToFolder(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @PathVariable Long fileIdx,
+            @RequestBody FileInfoDto.MoveReq request) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileActionRes result = fileUpDownloadService.moveToFolder(
+                userIdx,
+                fileIdx,
+                request != null ? request.getTargetParentId() : null
+        );
+
+        return ResponseEntity.ok(result);
+    }
+
+    @PatchMapping("/{fileIdx}/rename")
+    public ResponseEntity<FileInfoDto.FileListItemRes> renameFolder(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @PathVariable Long fileIdx,
+            @RequestBody FileInfoDto.RenameReq request) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileListItemRes result = fileUpDownloadService.renameFolder(
+                userIdx,
+                fileIdx,
+                request != null ? request.getFileName() : null
+        );
+
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/{fileIdx}/properties")
+    public ResponseEntity<FileInfoDto.FolderPropertyRes> getFolderProperties(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @PathVariable Long fileIdx) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FolderPropertyRes result = fileUpDownloadService.getFolderProperties(userIdx, fileIdx);
+
+        return ResponseEntity.ok(result);
+    }
+
+    @PatchMapping("/move")
+    public ResponseEntity<FileInfoDto.FileActionRes> moveFilesToFolder(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @RequestBody FileInfoDto.MoveBatchReq request) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileActionRes result = fileUpDownloadService.moveFilesToFolder(
+                userIdx,
+                request != null ? request.getFileIdxList() : null,
+                request != null ? request.getTargetParentId() : null
+        );
+
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/storage/summary")
+    public ResponseEntity<FileInfoDto.StorageSummaryRes> getStorageSummary(
+            @AuthenticationPrincipal AuthUserDetails dto) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.StorageSummaryRes result = fileUpDownloadService.getStorageSummary(userIdx);
+
+        return ResponseEntity.ok(result);
+    }
 }

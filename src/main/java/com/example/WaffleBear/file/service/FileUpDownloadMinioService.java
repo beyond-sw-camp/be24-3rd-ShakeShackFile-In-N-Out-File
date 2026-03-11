@@ -29,7 +29,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,6 +47,9 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private static final long PARTITION_SIZE_BYTES = 100L * 1024 * 1024;
     private static final long CHUNK_SIZE_BYTES = 80L * 1024 * 1024;
     private static final long MIN_FINAL_PARTITION_SIZE_BYTES = 10L * 1024 * 1024;
+    private static final long BASIC_STORAGE_BYTES = 20L * 1024 * 1024 * 1024;
+    private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
+    private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
 
     @Override
     public List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests) {
@@ -208,6 +213,225 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .build();
     }
 
+    @Override
+    public FileInfoDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId) {
+        return moveFilesToFolder(userIdx, List.of(fileIdx), targetParentId);
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId) {
+        if (fileIdxList == null || fileIdxList.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        List<FileInfo> userFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx);
+        Map<Long, FileInfo> fileById = userFiles.stream()
+                .filter(file -> file.getIdx() != null)
+                .collect(HashMap::new, (map, file) -> map.put(file.getIdx(), file), HashMap::putAll);
+        FileInfo targetParent = resolveParentFolder(userIdx, targetParentId);
+
+        List<FileInfo> requestedSources = fileIdxList.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(fileIdx -> resolveOwnedFile(fileById, userIdx, fileIdx))
+                .toList();
+
+        if (requestedSources.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        Set<Long> requestedSourceIds = requestedSources.stream()
+                .map(FileInfo::getIdx)
+                .filter(Objects::nonNull)
+                .collect(HashSet::new, HashSet::add, HashSet::addAll);
+
+        List<FileInfo> topLevelSources = requestedSources.stream()
+                .filter(source -> !hasSelectedAncestor(source, requestedSourceIds, fileById))
+                .toList();
+
+        if (targetParent != null) {
+            for (FileInfo source : topLevelSources) {
+                if (source.getIdx().equals(targetParent.getIdx())) {
+                    throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+                }
+            }
+        }
+
+        for (FileInfo source : topLevelSources) {
+            if (source.isTrashed()) {
+                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+            }
+
+            if (resolveNodeType(source) == FileNodeType.FOLDER && targetParent != null) {
+                List<FileInfo> descendants = collectTargetTree(source, userFiles);
+                boolean movingIntoOwnTree = descendants.stream()
+                        .map(FileInfo::getIdx)
+                        .anyMatch(idx -> idx != null && idx.equals(targetParent.getIdx()));
+
+                if (movingIntoOwnTree) {
+                    throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+                }
+            }
+        }
+
+        topLevelSources.forEach(source -> source.changeParent(targetParent));
+        fileUpDownloadRepository.saveAll(topLevelSources);
+
+        return FileInfoDto.FileActionRes.builder()
+                .targetIdx(targetParentId)
+                .action("move")
+                .affectedCount(topLevelSources.size())
+                .build();
+    }
+
+    @Override
+    public FileInfoDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName) {
+        FileInfo folder = getOwnedFile(userIdx, folderIdx);
+        if (folder.isTrashed() || resolveNodeType(folder) != FileNodeType.FOLDER) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        folder.rename(sanitizeFolderName(folderName));
+        return toFileListItem(fileUpDownloadRepository.save(folder));
+    }
+
+    @Override
+    public FileInfoDto.FolderPropertyRes getFolderProperties(Long userIdx, Long folderIdx) {
+        FileInfo folder = getOwnedFile(userIdx, folderIdx);
+        if (folder.isTrashed() || resolveNodeType(folder) != FileNodeType.FOLDER) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        List<FileInfo> userFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx)
+                .stream()
+                .filter(file -> !file.isTrashed())
+                .toList();
+        List<FileInfo> directChildren = userFiles.stream()
+                .filter(file -> file.getParent() != null && folderIdx.equals(file.getParent().getIdx()))
+                .toList();
+        List<FileInfo> targetTree = collectTargetTree(folder, userFiles);
+        List<FileInfo> descendants = targetTree.stream()
+                .filter(file -> !folderIdx.equals(file.getIdx()))
+                .toList();
+
+        int directFileCount = (int) directChildren.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
+                .count();
+        int directFolderCount = (int) directChildren.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FOLDER)
+                .count();
+        int totalFileCount = (int) descendants.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
+                .count();
+        int totalFolderCount = (int) descendants.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FOLDER)
+                .count();
+        long directSize = directChildren.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
+                .map(FileInfo::getFileSize)
+                .filter(size -> size != null && size > 0)
+                .mapToLong(Long::longValue)
+                .sum();
+        long totalSize = descendants.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
+                .map(FileInfo::getFileSize)
+                .filter(size -> size != null && size > 0)
+                .mapToLong(Long::longValue)
+                .sum();
+
+        return FileInfoDto.FolderPropertyRes.builder()
+                .idx(folder.getIdx())
+                .folderName(folder.getFileOriginName())
+                .parentId(folder.getParent() != null ? folder.getParent().getIdx() : null)
+                .directChildCount(directChildren.size())
+                .directFileCount(directFileCount)
+                .directFolderCount(directFolderCount)
+                .totalChildCount(descendants.size())
+                .totalFileCount(totalFileCount)
+                .totalFolderCount(totalFolderCount)
+                .directSize(directSize)
+                .totalSize(totalSize)
+                .uploadDate(folder.getUploadDate())
+                .lastModifyDate(folder.getLastModifyDate())
+                .build();
+    }
+
+    @Override
+    public FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx) {
+        List<FileInfo> userFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx);
+        List<FileInfo> allFileNodes = userFiles.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
+                .toList();
+        List<FileInfo> activeFileNodes = allFileNodes.stream()
+                .filter(file -> !file.isTrashed())
+                .toList();
+        List<FileInfo> trashFileNodes = allFileNodes.stream()
+                .filter(FileInfo::isTrashed)
+                .toList();
+        List<FileInfo> activeFolderNodes = userFiles.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FOLDER && !file.isTrashed())
+                .toList();
+        List<FileInfo> trashFolderNodes = userFiles.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FOLDER && file.isTrashed())
+                .toList();
+
+        StoragePlan storagePlan = resolveStoragePlan(resolveCurrentUserRole());
+        long usedBytes = sumFileSizes(allFileNodes);
+        long activeUsedBytes = sumFileSizes(activeFileNodes);
+        long trashUsedBytes = sumFileSizes(trashFileNodes);
+        int usagePercent = storagePlan.quotaBytes() > 0
+                ? (int) Math.min(100, Math.round((usedBytes * 100.0) / storagePlan.quotaBytes()))
+                : 0;
+        long remainingBytes = Math.max(0L, storagePlan.quotaBytes() - usedBytes);
+
+        Map<String, StorageCategoryAccumulator> categories = new HashMap<>();
+        initializeStorageCategories(categories);
+        for (FileInfo file : activeFileNodes) {
+            String categoryKey = categorizeExtension(file.getFileFormat());
+            StorageCategoryAccumulator accumulator = categories.get(categoryKey);
+            if (accumulator == null) {
+                continue;
+            }
+
+            accumulator.count += 1;
+            accumulator.sizeBytes += safeFileSize(file);
+        }
+
+        List<FileInfoDto.StorageCategoryRes> categoryResponses = List.of(
+                toStorageCategoryResponse("document", categories.get("document"), activeUsedBytes),
+                toStorageCategoryResponse("image", categories.get("image"), activeUsedBytes),
+                toStorageCategoryResponse("video", categories.get("video"), activeUsedBytes),
+                toStorageCategoryResponse("archive", categories.get("archive"), activeUsedBytes),
+                toStorageCategoryResponse("audio", categories.get("audio"), activeUsedBytes),
+                toStorageCategoryResponse("other", categories.get("other"), activeUsedBytes)
+        );
+
+        List<FileInfoDto.StorageTopFileRes> largestFiles = activeFileNodes.stream()
+                .sorted(Comparator.comparingLong(this::safeFileSize).reversed()
+                        .thenComparing(FileInfo::getLastModifyDate, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(7)
+                .map(this::toStorageTopFile)
+                .toList();
+
+        return FileInfoDto.StorageSummaryRes.builder()
+                .planCode(storagePlan.code())
+                .planLabel(storagePlan.label())
+                .quotaBytes(storagePlan.quotaBytes())
+                .usedBytes(usedBytes)
+                .activeUsedBytes(activeUsedBytes)
+                .trashUsedBytes(trashUsedBytes)
+                .remainingBytes(remainingBytes)
+                .usagePercent(usagePercent)
+                .totalFileCount(allFileNodes.size())
+                .activeFileCount(activeFileNodes.size())
+                .trashFileCount(trashFileNodes.size())
+                .activeFolderCount(activeFolderNodes.size())
+                .trashFolderCount(trashFolderNodes.size())
+                .categories(categoryResponses)
+                .largestFiles(largestFiles)
+                .build();
+    }
+
     private Long resolveUserIdx() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Long userIdx = 0L;
@@ -368,6 +592,15 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
     }
 
+    private FileInfo resolveOwnedFile(Map<Long, FileInfo> fileById, Long userIdx, Long fileIdx) {
+        FileInfo file = fileById.get(fileIdx);
+        if (file != null) {
+            return file;
+        }
+
+        return getOwnedFile(userIdx, fileIdx);
+    }
+
     private List<FileInfo> collectTargetTree(FileInfo target, List<FileInfo> userFiles) {
         Map<Long, List<FileInfo>> childrenByParent = new HashMap<>();
         for (FileInfo file : userFiles) {
@@ -420,6 +653,21 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
 
         return depth;
+    }
+
+    private boolean hasSelectedAncestor(FileInfo file, Set<Long> selectedIds, Map<Long, FileInfo> fileById) {
+        FileInfo parent = file.getParent();
+        Set<Long> visited = new HashSet<>();
+
+        while (parent != null && parent.getIdx() != null && visited.add(parent.getIdx())) {
+            if (selectedIds.contains(parent.getIdx())) {
+                return true;
+            }
+
+            parent = fileById.getOrDefault(parent.getIdx(), parent).getParent();
+        }
+
+        return false;
     }
 
     private void removeMinioObjects(List<FileInfo> files) {
@@ -634,7 +882,119 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .build();
     }
 
+    private String resolveCurrentUserRole() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof AuthUserDetails userDetails) {
+            return userDetails.getRole();
+        }
+
+        return "ROLE_USER";
+    }
+
+    private StoragePlan resolveStoragePlan(String role) {
+        String normalizedRole = role == null ? "" : role.toUpperCase(Locale.ROOT);
+
+        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE") || normalizedRole.contains("ADMIN")) {
+            return new StoragePlan("PREMIUM", "프리미엄", PREMIUM_STORAGE_BYTES);
+        }
+
+        if (normalizedRole.contains("PREMIUM") || normalizedRole.contains("PRO") || normalizedRole.contains("PLUS")) {
+            return new StoragePlan("PLUS", "플러스", PLUS_STORAGE_BYTES);
+        }
+
+        return new StoragePlan("BASIC", "기본", BASIC_STORAGE_BYTES);
+    }
+
+    private long sumFileSizes(List<FileInfo> fileNodes) {
+        return fileNodes.stream()
+                .mapToLong(this::safeFileSize)
+                .sum();
+    }
+
+    private long safeFileSize(FileInfo file) {
+        return file != null && file.getFileSize() != null && file.getFileSize() > 0
+                ? file.getFileSize()
+                : 0L;
+    }
+
+    private void initializeStorageCategories(Map<String, StorageCategoryAccumulator> categories) {
+        categories.put("document", new StorageCategoryAccumulator("문서"));
+        categories.put("image", new StorageCategoryAccumulator("이미지"));
+        categories.put("video", new StorageCategoryAccumulator("동영상"));
+        categories.put("archive", new StorageCategoryAccumulator("압축"));
+        categories.put("audio", new StorageCategoryAccumulator("오디오"));
+        categories.put("other", new StorageCategoryAccumulator("기타"));
+    }
+
+    private String categorizeExtension(String fileFormat) {
+        String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
+
+        if (Set.of("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "csv", "hwp").contains(extension)) {
+            return "document";
+        }
+
+        if (Set.of("jpg", "jpeg", "png", "gif", "svg", "webp", "bmp", "heic").contains(extension)) {
+            return "image";
+        }
+
+        if (Set.of("mp4", "mov", "avi", "mkv", "wmv", "webm").contains(extension)) {
+            return "video";
+        }
+
+        if (Set.of("zip", "rar", "7z", "tar", "gz").contains(extension)) {
+            return "archive";
+        }
+
+        if (Set.of("mp3", "wav", "aac", "flac", "ogg", "m4a").contains(extension)) {
+            return "audio";
+        }
+
+        return "other";
+    }
+
+    private FileInfoDto.StorageCategoryRes toStorageCategoryResponse(
+            String categoryKey,
+            StorageCategoryAccumulator accumulator,
+            long totalActiveBytes) {
+        long sizeBytes = accumulator != null ? accumulator.sizeBytes : 0L;
+        int usagePercent = totalActiveBytes > 0
+                ? (int) Math.round((sizeBytes * 100.0) / totalActiveBytes)
+                : 0;
+
+        return FileInfoDto.StorageCategoryRes.builder()
+                .categoryKey(categoryKey)
+                .categoryLabel(accumulator != null ? accumulator.label : categoryKey)
+                .fileCount(accumulator != null ? accumulator.count : 0)
+                .sizeBytes(sizeBytes)
+                .usagePercent(usagePercent)
+                .build();
+    }
+
+    private FileInfoDto.StorageTopFileRes toStorageTopFile(FileInfo entity) {
+        return FileInfoDto.StorageTopFileRes.builder()
+                .idx(entity.getIdx())
+                .fileOriginName(entity.getFileOriginName())
+                .fileFormat(entity.getFileFormat())
+                .fileSize(entity.getFileSize())
+                .lastModifyDate(entity.getLastModifyDate())
+                .parentId(entity.getParent() != null ? entity.getParent().getIdx() : null)
+                .build();
+    }
+
     private FileNodeType resolveNodeType(FileInfo entity) {
         return entity.getNodeType() == null ? FileNodeType.FILE : entity.getNodeType();
+    }
+
+    private record StoragePlan(String code, String label, long quotaBytes) {
+    }
+
+    private static class StorageCategoryAccumulator {
+        private final String label;
+        private int count;
+        private long sizeBytes;
+
+        private StorageCategoryAccumulator(String label) {
+            this.label = label;
+        }
     }
 }

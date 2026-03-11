@@ -20,4 +20,14 @@ public interface FileUpDownloadService {
     FileInfoDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx);
 
     FileInfoDto.FileActionRes clearTrash(Long userIdx);
+
+    FileInfoDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId);
+
+    FileInfoDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName);
+
+    FileInfoDto.FolderPropertyRes getFolderProperties(Long userIdx, Long folderIdx);
+
+    FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId);
+
+    FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx);
 }

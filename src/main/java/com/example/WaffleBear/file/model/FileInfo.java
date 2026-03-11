@@ -80,4 +80,12 @@ public class FileInfo {
     public boolean isTrashed() {
         return Boolean.TRUE.equals(this.trashed);
     }
+
+    public void changeParent(FileInfo parent) {
+        this.parent = parent;
+    }
+
+    public void rename(String fileOriginName) {
+        this.fileOriginName = fileOriginName;
+    }
 }
