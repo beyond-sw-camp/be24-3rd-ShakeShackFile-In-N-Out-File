@@ -31,16 +31,22 @@ public class Post {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
     @Column(nullable = false)
-    private boolean Type;
+    private Boolean type;
 
     @PrePersist
     public void setCreatedAt() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = createdAt;
-        this.Type = false;
+        this.type = false;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now(); // 수정 시각 자동 업데이트 등
     }
 
     public void update(String title, String contents) {

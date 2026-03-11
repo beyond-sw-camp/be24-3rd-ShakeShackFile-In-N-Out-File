@@ -29,6 +29,9 @@ public class PostController {
         User writer = ur.findByEmail(email).orElseThrow(
                 () -> new RuntimeException("사용자를 찾을수 없습니다.")
         );
+        System.out.println(dto.getIdx());
+        System.out.println(dto.getTitle());
+        System.out.println(dto.getContents());
 
         PostDto.ResPost result =  ps.save(dto, writer);
 
