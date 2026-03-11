@@ -19,12 +19,12 @@ public class PostService {
     private final PostRepository pr;
     private final UserPostRepository upr;
 
-    public PostDto.ResPost save(PostDto.ReqPost dto) {
+    public PostDto.ResPost save(PostDto.ReqPost dto, User user) {
 
         Post result = dto.toEntity();
         result = pr.save(result);
 
-        upr.save(new UserPostDto.ReqUserPost().toEntity(result));
+        upr.save(new UserPostDto.ReqUserPost().toEntity(result, user));
 
         return PostDto.ResPost.from(result);
     }
@@ -33,6 +33,8 @@ public class PostService {
         Post result = pr.findById(post_idx).orElseThrow(
                 () -> new RuntimeException("파일이 없습니다.")
         );
+        // UserPost랑 Post랑 관계 맺기
+        UserPost userPost = upr.findById(check_user).orElseThrow();
 
         if(result.getUserPosts().contains(check_user)) {
             return PostDto.ResPost.from(result);

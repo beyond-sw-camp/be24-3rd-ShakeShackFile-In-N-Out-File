@@ -7,6 +7,8 @@ import java.util.List;
 public interface FileUpDownloadService {
     List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests);
 
+    FileInfoDto.CompleteRes completeUpload(FileInfoDto.CompleteReq request);
+
     FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto);
 
     FileInfoDto.FileRes fileList(Long idx);
