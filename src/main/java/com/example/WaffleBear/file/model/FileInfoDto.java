@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class FileInfoDto {
@@ -65,5 +66,25 @@ public class FileInfoDto {
         private String fileSaveName;
         private String fileFormat;
         private String finalObjectKey;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class FileListItemRes {
+        private Long idx;
+        private String fileOriginName;
+        private String fileSaveName;
+        private String fileSavePath;
+        private String fileFormat;
+        private Long fileSize;
+        private Boolean lockedFile;
+        private Boolean sharedFile;
+        private LocalDateTime uploadDate;
+        private LocalDateTime lastModifyDate;
+        private String presignedDownloadUrl;
+        private Integer presignedUrlExpiresIn;
     }
 }

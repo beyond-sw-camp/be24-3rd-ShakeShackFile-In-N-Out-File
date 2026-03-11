@@ -91,26 +91,8 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileRes fileList(Long idx) {
-        if (idx == null) {
-            throw new IllegalArgumentException("File idx is required.");
-        }
-
-        Optional<FileInfo> fileInfo = fileUpDownloadRepository.findById(idx);
-        FileInfo entity = fileInfo.orElseThrow(() -> new IllegalArgumentException("File not found: " + idx));
-
-        Path filePath = Path.of(entity.getFileSaveName());
-        if (!Files.isRegularFile(filePath)) {
-            throw new IllegalStateException("Saved local file not found: " + filePath);
-        }
-
-        return FileInfoDto.FileRes.builder()
-//                .fileIdx(entity.getIdx())
-                .fileOriginName(entity.getFileOriginName())
-                .fileSaveName(entity.getFileSaveName())
-//                .objectUrl(filePath.toUri().toString())
-                .presignedUrlExpiresIn(null)
-                .build();
+    public List<FileInfoDto.FileListItemRes> fileList(Long idx) {
+        return List.of();
     }
 
     private FileInfoDto.FileRes buildResponse(FileInfo saved, Path targetPath) {

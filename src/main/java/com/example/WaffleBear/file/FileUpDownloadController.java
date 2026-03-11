@@ -33,4 +33,13 @@ public class FileUpDownloadController {
 
         return ResponseEntity.ok(result);
     }
+
+    @GetMapping("/list")
+    public ResponseEntity<List<FileInfoDto.FileListItemRes>> fileList(
+            @AuthenticationPrincipal AuthUserDetails dto) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        List<FileInfoDto.FileListItemRes> result = fileUpDownloadService.fileList(userIdx);
+
+        return ResponseEntity.ok(result);
+    }
 }

@@ -11,5 +11,5 @@ public interface FileUpDownloadService {
 
     FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto);
 
-    FileInfoDto.FileRes fileList(Long idx);
+    List<FileInfoDto.FileListItemRes> fileList(Long idx);
 }

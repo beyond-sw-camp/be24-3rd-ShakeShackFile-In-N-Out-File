@@ -87,8 +87,8 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileRes fileList(Long idx) {
-        throw new UnsupportedOperationException("S3 service currently supports presigned upload only.");
+    public List<FileInfoDto.FileListItemRes> fileList(Long idx) {
+        return List.of();
     }
 
     private String normalizeFormat(FileInfoDto.FileReq req) {
