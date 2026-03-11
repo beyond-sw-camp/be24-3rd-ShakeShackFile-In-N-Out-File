@@ -61,6 +61,7 @@ public class SecurityConfig {
         http.addFilterBefore(loginFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
+    //호
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
