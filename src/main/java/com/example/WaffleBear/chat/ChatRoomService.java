@@ -80,5 +80,8 @@ public class ChatRoomService {
             chatRoomRepository.deleteById(roomIdx);
         }
     }
+    public boolean isMember(Long roomId, Long userIdx) {
+        return participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, userIdx);
+    }
 
 }
