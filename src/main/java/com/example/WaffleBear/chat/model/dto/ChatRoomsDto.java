@@ -13,7 +13,6 @@ import java.util.List;
 public class ChatRoomsDto {
     @Getter
     public static class ChatRoomsReq {
-        private String title;
         private List<Long> participantsIdx;
 
         // Service로부터 이미 조회된 User 리스트를 전달받아 처리
@@ -59,6 +58,7 @@ public class ChatRoomsDto {
         private String title;
         private String lastMessage;
         private LocalDateTime lastMessageTime;
+        private int participantCount;
 
         public static ListRes from(ChatRooms entity) {
             return ListRes.builder()
@@ -66,6 +66,7 @@ public class ChatRoomsDto {
                     .title(entity.getTitle())
                     .lastMessage(entity.getLastMessage())
                     .lastMessageTime(entity.getLastMessageTime())
+                    .participantCount(entity.getParticipants() != null ? entity.getParticipants().size() : 0)
                     .build();
         }
     }
