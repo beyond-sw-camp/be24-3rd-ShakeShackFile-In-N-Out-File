@@ -45,7 +45,13 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         AuthUserDetails user = (AuthUserDetails) authResult.getPrincipal();
 
         // 1. 서비스 계층에 비즈니스 로직 위임
-        TokenDto.AuthTokenResponse tokens = authService.issueTokens(user.getIdx(), user.getEmail(), user.getName(), user.getRole());
+        TokenDto.AuthTokenResponse tokens = authService.issueTokens(
+                user.getIdx(),
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                user.getRole()
+        );
 
         // 2. HTTP 응답 제어 (Access Token -> Header)
         response.setHeader("Authorization", "Bearer " + tokens.accessToken());
