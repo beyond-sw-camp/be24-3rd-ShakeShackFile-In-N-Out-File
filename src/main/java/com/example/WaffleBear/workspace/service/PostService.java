@@ -26,14 +26,18 @@ public class PostService {
 
     public PostDto.ResPost save(PostDto.ReqPost dto, User user) {
 
-        Post result = pr.findById(dto.getIdx()).orElse(null);
+        Post result;
 
 
-        if(result != null) {
+        if(dto.getIdx() != null) {
+            result = pr.findById(dto.getIdx())
+                    .orElseThrow(() -> new IllegalArgumentException("해당 게시글이 존재하지 않습니다."));
             result.update(dto.getTitle(), dto.getContents());
             pr.save(result);
         }else {
-            result = dto.toEntity();
+            result = new Post();
+            result.update(dto.getTitle(), dto.getContents());
+
             pr.save(result);
             upr.save(new UserPostDto.ReqUserPost().toEntity(result, user));
         }
