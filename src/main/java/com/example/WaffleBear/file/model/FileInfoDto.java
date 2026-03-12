@@ -75,6 +75,16 @@ public class FileInfoDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    public static class AbortReq {
+        private String finalObjectKey;
+        private List<String> chunkObjectKeys;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class FileListItemRes {
         private Long idx;
         private String fileOriginName;

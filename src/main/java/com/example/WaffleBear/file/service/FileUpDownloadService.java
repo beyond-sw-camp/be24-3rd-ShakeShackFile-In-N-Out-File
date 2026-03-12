@@ -9,6 +9,8 @@ public interface FileUpDownloadService {
 
     FileInfoDto.CompleteRes completeUpload(FileInfoDto.CompleteReq request);
 
+    FileInfoDto.FileActionRes abortUpload(Long userIdx, FileInfoDto.AbortReq request);
+
     FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto);
 
     List<FileInfoDto.FileListItemRes> fileList(Long idx);

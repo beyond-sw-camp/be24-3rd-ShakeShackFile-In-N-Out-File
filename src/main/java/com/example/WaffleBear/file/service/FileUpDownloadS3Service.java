@@ -132,6 +132,11 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
     }
 
     @Override
+    public FileInfoDto.FileActionRes abortUpload(Long userIdx, FileInfoDto.AbortReq request) {
+        throw new UnsupportedOperationException("S3 service currently does not support abort upload operations.");
+    }
+
+    @Override
     public FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx) {
         throw new UnsupportedOperationException("S3 service currently does not support storage summary operations.");
     }
