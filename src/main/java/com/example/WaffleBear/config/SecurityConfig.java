@@ -53,7 +53,7 @@ public class SecurityConfig {
 
         // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/ws/**", "/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/api/auth/reissue").permitAll()
+                .requestMatchers("/ws/**", "/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue").permitAll()
                 .anyRequest().authenticated()
         );
 
