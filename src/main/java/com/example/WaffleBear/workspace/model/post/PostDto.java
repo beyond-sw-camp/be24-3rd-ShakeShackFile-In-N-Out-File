@@ -5,6 +5,7 @@ import com.example.WaffleBear.workspace.model.relation.UserPost;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import org.checkerframework.checker.units.qual.Acceleration;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -50,15 +51,22 @@ public class PostDto {
         private Long post_idx;
         private String title;
         private LocalDateTime updatedAt;
-        private Boolean type;
+        private isShare status;
 
         public static ResList from(Post entity) {
             return ResList.builder()
                     .post_idx(entity.getIdx())
                     .title(entity.getTitle())
                     .updatedAt(entity.getUpdatedAt())
-                    .type(entity.getType())
+                    .status(entity.getStatus())
                     .build();
         }
+    }
+
+    @Getter
+    @Builder
+    public static class ReqType {
+        private Boolean type;
+        private isShare status;
     }
 }

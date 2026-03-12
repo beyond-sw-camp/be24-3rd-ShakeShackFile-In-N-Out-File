@@ -37,11 +37,15 @@ public class Post {
     @Column(nullable = false)
     private Boolean type;
 
+    @Column(nullable = false)
+    private isShare status;
+
     @PrePersist
     public void setCreatedAt() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = createdAt;
         this.type = false;
+        this.status = isShare.Private;
     }
 
     @PreUpdate
@@ -53,5 +57,9 @@ public class Post {
         this.title = title;
         this.contents = contents;
         // updatedAt은 @PreUpdate에 의해 자동으로 갱신됩니다.
+    }
+    public void typeUpdate(Boolean type, isShare status) {
+        this.type = type;
+        this.status = status;
     }
 }
