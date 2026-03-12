@@ -50,8 +50,9 @@ public class ChatRoomController {
         return ResponseEntity.ok(BaseResponse.success(dto));
     }
     @DeleteMapping("/exit/{roomIdx}")
-    public ResponseEntity exit(@PathVariable Long roomIdx){
-        chatRoomService.exit(roomIdx);
+    public ResponseEntity exit(@PathVariable Long roomIdx,
+                               @AuthenticationPrincipal AuthUserDetails user){
+        chatRoomService.exit(roomIdx, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success("성공"));
     }
 

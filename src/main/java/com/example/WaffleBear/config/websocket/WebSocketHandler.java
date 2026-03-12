@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Config.websocket;
+package com.example.WaffleBear.config.websocket;
 
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import lombok.extern.slf4j.Slf4j;
