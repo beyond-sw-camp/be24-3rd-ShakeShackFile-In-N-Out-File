@@ -49,8 +49,10 @@ public class ChatMessageService {
         ChatMessages message = chatMessageRepository.save(req.toEntity(room, user));
 
         // ChatRooms 정보 업데이트
-        room.setLastMessage(message.getContents());
-        room.setLastMessageTime(message.getSendTime());
+        room.builder()
+                .lastMessage(message.getContents())
+                .lastMessageTime(message.getSendTime())
+                .build();
 
         // 전송용 응답 DTO 반환
         return ChatMessagesDto.ListRes.from(message);

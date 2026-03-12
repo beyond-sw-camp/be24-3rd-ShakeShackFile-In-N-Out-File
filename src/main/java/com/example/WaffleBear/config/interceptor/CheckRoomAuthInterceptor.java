@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Config.interceptor;
+package com.example.WaffleBear.config.interceptor;
 
 
 import com.example.WaffleBear.user.model.AuthUserDetails;

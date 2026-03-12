@@ -70,8 +70,15 @@ public class ChatRoomService {
 
         return ChatRoomsDto.PageRes.from(result);
     }
-    public void exit(Long idx) {
-        chatRoomRepository.deleteById(idx);
+    @Transactional
+    public void exit(Long roomIdx, Long userIdx) {
+        // 1. 해당 방에서 내가 참여자인지 확인하고 삭제
+        participantsRepository.deleteByChatRoomsIdxAndUsersIdx(roomIdx, userIdx);
+
+        // 2. (선택 사항) 만약 방에 남은 참여자가 아무도 없다면 방 자체를 삭제
+        if (!participantsRepository.existsByChatRoomsIdx(roomIdx)) {
+            chatRoomRepository.deleteById(roomIdx);
+        }
     }
 
 }

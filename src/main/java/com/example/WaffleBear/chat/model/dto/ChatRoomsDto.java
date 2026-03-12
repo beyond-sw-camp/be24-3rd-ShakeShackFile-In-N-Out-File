@@ -13,6 +13,7 @@ import java.util.List;
 public class ChatRoomsDto {
     @Getter
     public static class ChatRoomsReq {
+        private String title;
         private List<Long> participantsIdx;
 
         // Service로부터 이미 조회된 User 리스트를 전달받아 처리
