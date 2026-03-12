@@ -1,8 +1,8 @@
-package com.example.WaffleBear.Config;
+package com.example.WaffleBear.config;
 
 
-import com.example.WaffleBear.Config.interceptor.CheckRoomAuthInterceptor;
-import com.example.WaffleBear.Config.interceptor.JwtHandshakeInterceptor;
+import com.example.WaffleBear.config.interceptor.CheckRoomAuthInterceptor;
+import com.example.WaffleBear.config.interceptor.JwtHandshakeInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;

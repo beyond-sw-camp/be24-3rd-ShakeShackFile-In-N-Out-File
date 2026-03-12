@@ -6,7 +6,10 @@ import com.example.WaffleBear.user.model.RefreshToken;
 import com.example.WaffleBear.user.model.TokenDto;
 import com.example.WaffleBear.utils.JwtUtil;
 
+import com.example.WaffleBear.common.exception.BaseException;
+import com.example.WaffleBear.common.model.BaseResponseStatus;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -48,29 +51,31 @@ public class AuthService {
     public TokenDto.AuthTokenResponse reissue(String refreshToken) {
         // 1. 토큰 존재 여부 확인
         if (refreshToken == null) {
-            throw new IllegalArgumentException("Refresh Token이 존재하지 않습니다.");
+            throw new BaseException(BaseResponseStatus.JWT_INVALID);
         }
 
         // 2. 토큰 만료 여부 검증 (JwtUtil에 isExpired 메서드가 있다고 가정)
         try {
             jwtUtil.isExpired(refreshToken);
         } catch (ExpiredJwtException e) {
-            throw new IllegalArgumentException("Refresh Token이 만료되었습니다.");
+            throw new BaseException(BaseResponseStatus.JWT_EXPIRED);
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new BaseException(BaseResponseStatus.JWT_INVALID);
         }
 
         // 3. 토큰 카테고리 검증 (Refresh Token이 맞는지 확인)
         String category = jwtUtil.getCategory(refreshToken);
         if (!category.equals("refresh")) {
-            throw new IllegalArgumentException("유효하지 않은 토큰 카테고리입니다.");
+            throw new BaseException(BaseResponseStatus.JWT_INVALID);
         }
 
         // 4. DB에 저장된 토큰과 대조 (핵심 보안 로직)
         String email = jwtUtil.getEmail(refreshToken);
         RefreshToken dbToken = refreshTokenRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("DB에 등록되지 않은 사용자/토큰입니다."));
+                .orElseThrow(() -> new BaseException(BaseResponseStatus.JWT_INVALID));
 
         if (!dbToken.getToken().equals(refreshToken)) {
-            throw new IllegalArgumentException("토큰 정보가 일치하지 않습니다. 탈취가 의심됩니다.");
+            throw new BaseException(BaseResponseStatus.JWT_INVALID);
         }
 
         // 5. 새로운 토큰 정보 추출 및 생성

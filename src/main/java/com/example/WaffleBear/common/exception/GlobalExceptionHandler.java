@@ -39,6 +39,20 @@ public class GlobalExceptionHandler {
                 .body(response);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity handleIllegalArgumentException(IllegalArgumentException e) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(BaseResponse.fail(BaseResponseStatus.REQUEST_ERROR));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity handleGeneralException(Exception e) {
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(BaseResponse.fail(BaseResponseStatus.FAIL));
+    }
+
     private int statusCodeMapper(int errorCode) {
         if (errorCode > 3000) {
             return 400;
