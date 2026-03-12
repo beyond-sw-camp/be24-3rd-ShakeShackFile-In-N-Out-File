@@ -2,8 +2,13 @@ package com.example.WaffleBear.feater;
 
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
+import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -12,6 +17,8 @@ import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,9 +37,13 @@ public class FeaterService {
     private static final int PROFILE_IMAGE_SIZE = 300;
     private static final long PROFILE_IMAGE_MAX_SIZE_BYTES = 10L * 1024 * 1024;
     private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
+    private static final String PROFILE_IMAGE_DIRECTORY = "userProfileImage";
+    private static final String PROFILE_IMAGE_FILE_NAME = "profile.png";
 
     private final FeaterRepository featerRepository;
     private final UserRepository userRepository;
+    private final MinioClient minioClient;
+    private final MinioProperties minioProperties;
 
     public FeaterDto.SettingsRes getSettings(Long userIdx) {
         User user = getUser(userIdx);
@@ -72,20 +83,10 @@ public class FeaterService {
 
         BufferedImage sourceImage = readImage(image);
         BufferedImage resizedImage = resizeToSquare(sourceImage, PROFILE_IMAGE_SIZE);
+        String objectKey = buildProfileImageObjectKey(user.getIdx());
 
-        String fileName = "user-" + user.getIdx() + "-" + System.currentTimeMillis() + ".png";
-        Path directory = resolveProfileImageDirectory();
-        Path targetPath = directory.resolve(fileName).normalize();
-
-        try {
-            Files.createDirectories(directory);
-            deleteStoredProfileImage(settings.getProfileImageUrl());
-            ImageIO.write(resizedImage, "png", targetPath.toFile());
-        } catch (IOException exception) {
-            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
-        }
-
-        settings.updateProfileImage(fileName);
+        uploadProfileImageToMinio(resizedImage, objectKey);
+        settings.updateProfileImage(objectKey);
         FeaterSettings saved = featerRepository.save(settings);
 
         return toResponse(user, saved);
@@ -246,19 +247,32 @@ public class FeaterService {
         return resizedImage;
     }
 
-    private Path resolveProfileImageDirectory() {
-        return Paths.get("src", "main", "resources", "upload", "userImage")
-                .toAbsolutePath()
-                .normalize();
+    private void uploadProfileImageToMinio(BufferedImage resizedImage, String objectKey) {
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            ImageIO.write(resizedImage, "png", outputStream);
+            byte[] imageBytes = outputStream.toByteArray();
+
+            try (ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBytes)) {
+                minioClient.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(minioProperties.getBucket_cloud())
+                                .object(objectKey)
+                                .stream(inputStream, imageBytes.length, -1)
+                                .contentType("image/png")
+                                .build()
+                );
+            }
+        } catch (Exception exception) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
     }
 
-    private void deleteStoredProfileImage(String storedValue) throws IOException {
-        if (!isStoredProfileImageFileName(storedValue)) {
-            return;
+    private String buildProfileImageObjectKey(Long userIdx) {
+        if (userIdx == null) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        Path targetPath = resolveProfileImageDirectory().resolve(storedValue).normalize();
-        Files.deleteIfExists(targetPath);
+        return PROFILE_IMAGE_DIRECTORY + "/" + userIdx + "/" + PROFILE_IMAGE_FILE_NAME;
     }
 
     private String resolveProfileImagePreview(String storedValue) {
@@ -270,11 +284,35 @@ public class FeaterService {
             return storedValue;
         }
 
-        if (!isStoredProfileImageFileName(storedValue)) {
-            return null;
+        if (storedValue.startsWith(PROFILE_IMAGE_DIRECTORY + "/")) {
+            try {
+                return minioClient.getPresignedObjectUrl(
+                        GetPresignedObjectUrlArgs.builder()
+                                .method(Method.GET)
+                                .bucket(minioProperties.getBucket_cloud())
+                                .object(storedValue)
+                                .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                                .build()
+                );
+            } catch (Exception exception) {
+                return null;
+            }
         }
 
-        Path targetPath = resolveProfileImageDirectory().resolve(storedValue).normalize();
+        if (isLegacyStoredProfileImageFileName(storedValue)) {
+            return resolveLegacyProfileImagePreview(storedValue);
+        }
+
+        return null;
+    }
+
+    private String resolveLegacyProfileImagePreview(String storedValue) {
+        Path targetPath = Paths.get("src", "main", "resources", "upload", "userImage")
+                .toAbsolutePath()
+                .normalize()
+                .resolve(storedValue)
+                .normalize();
+
         if (!Files.exists(targetPath)) {
             return null;
         }
@@ -287,7 +325,7 @@ public class FeaterService {
         }
     }
 
-    private boolean isStoredProfileImageFileName(String value) {
+    private boolean isLegacyStoredProfileImageFileName(String value) {
         if (value == null || value.isBlank()) {
             return false;
         }
