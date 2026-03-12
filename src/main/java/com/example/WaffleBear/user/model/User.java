@@ -1,8 +1,20 @@
 package com.example.WaffleBear.user.model;
 
 import com.example.WaffleBear.file.model.FileInfo;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.util.List;
@@ -17,8 +29,11 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
 
+    @Setter
     @Column(unique = true)
     private String email;
+
+    @Setter
     private String name;
 
     @Setter
@@ -27,11 +42,24 @@ public class User {
     @Setter
     private Boolean enable;
 
+    @Setter
     @ColumnDefault(value = "'ROLE_USER'")
     private String role;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @Setter
+    @Enumerated(EnumType.STRING)
+    private UserAccountStatus accountStatus;
+
+    @OneToMany(mappedBy = "user")
     List<FileInfo> fileInfoList;
 
-    // 결제 기록이 있는지, 현재 플랜은 어떤건지 추가
+    @PrePersist
+    public void prePersist() {
+        if (role == null || role.isBlank()) {
+            role = "ROLE_USER";
+        }
+        if (accountStatus == null) {
+            accountStatus = UserAccountStatus.ACTIVE;
+        }
+    }
 }

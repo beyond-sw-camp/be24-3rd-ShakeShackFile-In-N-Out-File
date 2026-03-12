@@ -34,6 +34,7 @@ public class FeaterService {
     private static final long BASIC_STORAGE_BYTES = 20L * 1024 * 1024 * 1024;
     private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
     private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
+    private static final long ADMIN_STORAGE_BYTES = 10L * 1024 * 1024 * 1024 * 1024;
     private static final int PROFILE_IMAGE_SIZE = 300;
     private static final long PROFILE_IMAGE_MAX_SIZE_BYTES = 10L * 1024 * 1024;
     private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
@@ -146,7 +147,11 @@ public class FeaterService {
     private MembershipPlan resolveMembershipPlan(String role) {
         String normalizedRole = role == null ? "" : role.toUpperCase(Locale.ROOT);
 
-        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE") || normalizedRole.contains("ADMIN")) {
+        if (normalizedRole.contains("ADMIN")) {
+            return new MembershipPlan("ADMIN", "ADMIN MEMBER", "Admin 10TB", ADMIN_STORAGE_BYTES);
+        }
+
+        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE")) {
             return new MembershipPlan("PREMIUM", "PREMIUM MEMBER", "Premium 200GB", PREMIUM_STORAGE_BYTES);
         }
 
