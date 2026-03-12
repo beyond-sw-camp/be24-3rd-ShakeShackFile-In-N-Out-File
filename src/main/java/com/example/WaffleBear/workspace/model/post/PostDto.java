@@ -52,6 +52,7 @@ public class PostDto {
         private String title;
         private LocalDateTime updatedAt;
         private isShare status;
+        private String UUID;
 
         public static ResList from(Post entity) {
             return ResList.builder()
@@ -59,6 +60,7 @@ public class PostDto {
                     .title(entity.getTitle())
                     .updatedAt(entity.getUpdatedAt())
                     .status(entity.getStatus())
+                    .UUID(entity.getUUID())
                     .build();
         }
     }

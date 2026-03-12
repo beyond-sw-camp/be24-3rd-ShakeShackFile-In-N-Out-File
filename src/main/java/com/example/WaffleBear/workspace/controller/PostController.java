@@ -66,13 +66,14 @@ public class PostController {
         return BaseResponse.success(ResponseEntity.ok(result));
     }
 
-    @PostMapping("/invite/{idx}")
+    @PostMapping("/invite")
     public BaseResponse invite(
             @AuthenticationPrincipal AuthUserDetails user,
-            @PathVariable("idx") Long post_idx) {
+            @RequestParam("uuid") String uuid,
+            @RequestParam("type") String type) {
 
         Long check_user = user.getIdx();
-        Optional<BaseResponse> result = ps.invite(post_idx, check_user);
+        Optional<BaseResponse> result = ps.invite(uuid, check_user, type);
 
         if(result.isPresent()) {
             return BaseResponse.success("초대 성공");
@@ -80,6 +81,24 @@ public class PostController {
             return BaseResponse.fail(BaseResponseStatus.FAIL);
         }
     }
+    @GetMapping("/verify")
+    public BaseResponse verifyEmail(
+            @RequestParam("uuid") String uuid,
+            @RequestParam("type") String type) {
+
+        if(type != "email") {
+
+            Optional<BaseResponse> result = ps.verifyEmail(uuid);
+
+            if (result.isPresent()) {
+                return BaseResponse.success("성공");
+            } else {
+                return BaseResponse.fail(BaseResponseStatus.FAIL);
+            }
+        }
+        return null;
+    }
+
     @PostMapping("/isShared/{idx}")
     public void isShared(
             @AuthenticationPrincipal AuthUserDetails user,

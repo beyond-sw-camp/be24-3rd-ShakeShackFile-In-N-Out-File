@@ -16,4 +16,6 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     // 만약 단건 조회가 필요하다면
     @Query("SELECT p FROM Post p JOIN p.userPosts up WHERE up.user.idx = :userIdx AND p.idx = :postIdx")
     Optional<Post> findByPostIdAndUserId(@Param("postIdx") Long postIdx, @Param("userIdx") Long userIdx);
+
+    Optional<Post> findByUUID(String uuid);
 }
