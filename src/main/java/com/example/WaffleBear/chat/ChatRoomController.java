@@ -29,7 +29,6 @@ public class ChatRoomController {
         Long roomId = chatRoomService.createChatRoom(dto, user.getIdx());
         return ResponseEntity.status(HttpStatus.CREATED).body(roomId);
     }
-
     /**
      * 2. 기존 채팅방에 유저 추가 초대
      * POST /api/v1/chat/rooms/{roomId}/invite
@@ -42,4 +41,19 @@ public class ChatRoomController {
         chatRoomService.inviteUsers(roomId, userIdx);
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/list")
+    public ResponseEntity list(
+            @RequestParam(required = true, defaultValue = "0") int page,
+            @RequestParam(required = true, defaultValue = "5") int size) {
+        ChatRoomsDto.PageRes dto = chatRoomService.list(page, size);
+        return ResponseEntity.ok(BaseResponse.success(dto));
+    }
+    @DeleteMapping("/exit/{roomIdx}")
+    public ResponseEntity exit(@PathVariable Long roomIdx,
+                               @AuthenticationPrincipal AuthUserDetails user){
+        chatRoomService.exit(roomIdx, user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success("성공"));
+    }
+
 }
