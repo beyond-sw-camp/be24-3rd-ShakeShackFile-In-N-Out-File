@@ -1,6 +1,8 @@
 package com.example.WaffleBear.workspace.controller;
 
+import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.user.model.User;
+import com.example.WaffleBear.workspace.model.relation.UserPostDto;
 import com.example.WaffleBear.workspace.service.PostService;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.common.model.BaseResponse;
@@ -62,6 +64,40 @@ public class PostController {
         Optional<BaseResponse>result = ps.delete(post_idx, check_user);
 
         return BaseResponse.success(ResponseEntity.ok(result));
+    }
+
+    @PostMapping("/invite/{idx}")
+    public BaseResponse invite(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable("idx") Long post_idx) {
+
+        Long check_user = user.getIdx();
+        Optional<BaseResponse> result = ps.invite(post_idx, check_user);
+
+        if(result.isPresent()) {
+            return BaseResponse.success("초대 성공");
+        }else {
+            return BaseResponse.fail(BaseResponseStatus.FAIL);
+        }
+    }
+    @PostMapping("/isShared/{idx}")
+    public void isShared(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable("idx") Long post_idx,
+            @RequestBody PostDto.ReqType dto) {
+
+        Long check_user = user.getIdx();
+
+        ps.isShared(post_idx, check_user, dto);
+    }
+    @GetMapping("/loadRole/{idx}")
+    public List<UserPostDto.ReqRole> loadRole(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable("idx") Long post_idx) {
+
+        Long check_user = user.getIdx();
+
+        return ps.loadRole(post_idx, check_user);
     }
 
     @GetMapping("/list")

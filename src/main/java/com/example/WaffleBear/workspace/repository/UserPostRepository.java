@@ -11,5 +11,6 @@ public interface UserPostRepository extends JpaRepository<UserPost, Long> {
     Optional<UserPost> findByUser_IdxAndWorkspace_Idx(Long userId, Long workspaceId);
 
     // 또는 2. 해당 유저의 모든 권한 리스트를 가져옴
-    List<UserPost> findAllByUser_Idx(Long userId);
+    List<UserPost> findAllByWorkspace_idx(Long post_idx);
+
 }
