@@ -1,6 +1,9 @@
 package com.example.WaffleBear.workspace.service;
 
 import com.example.WaffleBear.common.model.BaseResponse;
+import com.example.WaffleBear.email.EmailVerify;
+import com.example.WaffleBear.email.EmailVerifyRepository;
+import com.example.WaffleBear.email.EmailVerifyService;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.workspace.model.post.Post;
@@ -13,17 +16,22 @@ import com.example.WaffleBear.workspace.repository.PostRepository;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import javax.swing.text.html.Option;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 
 @Service
 @RequiredArgsConstructor
 public class PostService {
+    private final EmailVerifyRepository evr;
+    private final EmailVerifyService evs;
     private final UserRepository ur;
     private final PostRepository pr;
     private final UserPostRepository upr;
@@ -33,13 +41,16 @@ public class PostService {
         Post result;
 
         if(dto.getIdx() != null) {
+            // 해당 게시글을 업데이트 할 때
             result = pr.findById(dto.getIdx())
                     .orElseThrow(() -> new IllegalArgumentException("해당 게시글이 존재하지 않습니다."));
             result.update(dto.getTitle(), dto.getContents());
             pr.save(result);
         }else {
+            // 처음 게시글 만들 때
             result = new Post();
             result.update(dto.getTitle(), dto.getContents());
+            result.setUUID(UUID.randomUUID().toString());
 
             pr.save(result);
             upr.save(new UserPostDto.ReqUserPost().toEntity(result, user));
@@ -77,26 +88,48 @@ public class PostService {
             return Optional.of(BaseResponse.fail(REQUEST_ERROR));
         }
     }
-    public Optional<BaseResponse> invite(Long post_idx, Long check_user) {
+    public Optional<BaseResponse> invite(String uuid, Long check_user, String type) {
 
-        Post result = pr.findById(post_idx).orElseThrow(
+        Post post = pr.findByUUID(uuid).orElseThrow(
                 () -> new RuntimeException("파일이 없습니다.")
         );
         User user = ur.findById(check_user).orElseThrow(
-                () -> new RuntimeException("해당하는 유저가 없습니다.")
+                () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
         );
-        Optional<UserPost> userPost = upr.findByUser_IdxAndWorkspace_Idx(check_user, post_idx);
 
-        if(result.getStatus() != isShare.Private && !userPost.isPresent()) {
-            upr.save(UserPost.builder()
-                            .user(user)
-                            .workspace(result)
-                            .Level(AccessRole.READ)
-                            .build()
-                    );
-            return Optional.of(BaseResponse.success("초대 성공"));
+        switch (type) {
+            case "invite":
+            Optional<UserPost> result = upr.findByUser_IdxAndWorkspace_Idx(check_user, post.getIdx());
+
+            if (post.getStatus() != isShare.Private && !result.isPresent()) {
+                upr.save(UserPost.builder()
+                        .user(user)
+                        .workspace(post)
+                        .Level(AccessRole.READ)
+                        .build()
+                );
+                return Optional.of(BaseResponse.success("초대 성공"));
+            }
+            return Optional.empty();
+
+            case "email":
+                evr.save(new EmailVerify(uuid, user.getEmail()));
+
+                evs.sendVerificationEmail(user.getEmail(), user.getName(), uuid);
         }
         return null;
+    }
+    public Optional<BaseResponse> verifyEmail(String uuid) {
+        EmailVerify verificationToken = evr.findByToken(uuid)
+                .orElseThrow(() -> new RuntimeException("유효하지 않은 토큰입니다."));
+
+        if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("토큰이 만료되었습니다.");
+        }
+        // 3. 인증 완료된 토큰 삭제 (재사용 방지)
+        evr.delete(verificationToken);
+
+        return Optional.of(BaseResponse.success("초대 성공"));
     }
     public void isShared(Long post_idx, Long check_user, PostDto.ReqType dto) {
 

@@ -39,4 +39,36 @@ public class EmailVerifyService {
             throw new RuntimeException("이메일 발송 실패", e);
         }
     }
+    @Async
+    public void sendVerificationEmail(String email, String username, String token) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(email);
+            helper.setSubject("[WaffleBear] " + username + "님께서 워크스페이스에 초대하셨습니다.");
+
+            // 베이스 URL 설정
+            String baseUrl = "http://localhost:8080/workspace/verify?token=" + token;
+            String acceptLink = baseUrl + "&type=accept"; // 쿼리 파라미터 방식 권장
+            String rejectLink = baseUrl + "&type=reject";
+
+            String htmlContent = String.format(
+                    "<div style='text-align: center; border: 1px solid #ddd; padding: 20px;'>" +
+                            "<h1>%s님께서 워크스페이스에 초대하셨습니다.</h1>" +
+                            "<p>초대에 응하시려면 아래 버튼을 클릭해주세요.</p>" +
+                            "<div style='margin-top: 20px;'>" +
+                            "<a href='%s' style='background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;'>수락하기</a>" +
+                            "<a href='%s' style='background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;'>거절하기</a>" +
+                            "</div>" +
+                            "</div>",
+                    username, acceptLink, rejectLink
+            );
+
+            helper.setText(htmlContent, true);
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            throw new RuntimeException("이메일 발송 실패", e);
+        }
+    }
 }

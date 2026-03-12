@@ -40,6 +40,10 @@ public class Post {
     @Column(nullable = false)
     private isShare status;
 
+    @Setter
+    @Column(nullable = false)
+    private String UUID;
+
     @PrePersist
     public void setCreatedAt() {
         this.createdAt = LocalDateTime.now();

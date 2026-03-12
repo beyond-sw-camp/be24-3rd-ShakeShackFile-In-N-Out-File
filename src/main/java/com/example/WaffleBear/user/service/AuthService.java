@@ -83,7 +83,7 @@ public class AuthService {
         String name = jwtUtil.getName(refreshToken);
         String role = jwtUtil.getRole(refreshToken);
 
-        String newAccess = jwtUtil.createToken("access", userId, email, name, role, 600000L); // 10분
+        String newAccess = jwtUtil.createToken("access", userId, email, name, role, 60000000L); // 10분
         String newRefresh = jwtUtil.createToken("refresh", userId, email, name, role, 1209600000L); // 14일
 
         // 6. DB의 기존 Refresh Token 갱신 (RTR 기법)
