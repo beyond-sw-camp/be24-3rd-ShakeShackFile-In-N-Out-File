@@ -1,4 +1,4 @@
-package com.example.WaffleBear.Config.interceptor;
+package com.example.WaffleBear.config.interceptor;
 
 
 import com.example.WaffleBear.user.model.AuthUserDetails;
@@ -30,7 +30,7 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
             HttpServletRequest httpReq = serverHttpRequest.getServletRequest();
             if (httpReq.getCookies() != null) {
                 for (Cookie cookie : httpReq.getCookies()) {
-                    if (cookie.getName().equals("ATOKEN")) {
+                    if (cookie.getName().equals("refresh")) {
                         // JwtUtil에서 토큰 생성 및 확인하도록 리팩토링
                         Long idx = jwtUtil.getUserIdx(cookie.getValue());
                         String email = jwtUtil.getEmail(cookie.getValue());

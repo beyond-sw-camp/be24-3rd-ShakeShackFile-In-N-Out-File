@@ -8,6 +8,8 @@ import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.User;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
@@ -58,5 +60,25 @@ public class ChatRoomService {
 
             participantsRepository.saveAll(participants);
         }
+
+    public ChatRoomsDto.PageRes list(int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+
+        // 페이징 처리 ⭕, 페이지 번호가 필요하다 => Page 반환
+        // 페이징 처리 ⭕, 페이지 번호가 필요없다. => Slice 반환
+        Page<ChatRooms> result = chatRoomRepository.findAll(pageRequest);
+
+        return ChatRoomsDto.PageRes.from(result);
+    }
+    @Transactional
+    public void exit(Long roomIdx, Long userIdx) {
+        // 1. 해당 방에서 내가 참여자인지 확인하고 삭제
+        participantsRepository.deleteByChatRoomsIdxAndUsersIdx(roomIdx, userIdx);
+
+        // 2. (선택 사항) 만약 방에 남은 참여자가 아무도 없다면 방 자체를 삭제
+        if (!participantsRepository.existsByChatRoomsIdx(roomIdx)) {
+            chatRoomRepository.deleteById(roomIdx);
+        }
+    }
 
 }

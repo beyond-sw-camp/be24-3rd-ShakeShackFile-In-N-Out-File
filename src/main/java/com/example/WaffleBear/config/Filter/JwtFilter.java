@@ -55,7 +55,7 @@ public class JwtFilter extends OncePerRequestFilter {
         // ★ 이 로그가 핵심입니다. 서버 콘솔(Log)에 뭐라고 찍히는지 확인해 보세요!
         System.out.println("DEBUG: 추출된 순수 토큰 -> [" + token + "]");
 
-        // 4. 토큰 소멸 시간 검증
+        // 4. 토큰 검증
         try {
             jwtUtil.isExpired(token);
         } catch (ExpiredJwtException e) {
@@ -64,6 +64,12 @@ public class JwtFilter extends OncePerRequestFilter {
             response.setContentType("application/json;charset=UTF-8");
             PrintWriter writer = response.getWriter();
             writer.print("{\"error\": \"access token expired\"}");
+            return;
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            PrintWriter writer = response.getWriter();
+            writer.print("{\"error\": \"invalid token\"}");
             return;
         }
 

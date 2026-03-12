@@ -1,10 +1,7 @@
 package com.example.WaffleBear.chat.model.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,7 +17,9 @@ public class ChatRooms {
     private Long idx;
     private LocalDateTime createdAt;
     private String title;
+    @Setter
     private String lastMessage;
+    @Setter
     private LocalDateTime lastMessageTime;
 
     @OneToMany(mappedBy = "chatRooms", fetch = FetchType.LAZY)
