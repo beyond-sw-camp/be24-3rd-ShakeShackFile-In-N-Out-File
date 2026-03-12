@@ -51,7 +51,7 @@ public class JwtFilter extends OncePerRequestFilter {
         // 3. "Bearer " 부분을 제거하고 순수 토큰 문자열만 추출
         String token = authorization.split(" ")[1];
 
-        // 4. 토큰 소멸 시간 검증
+        // 4. 토큰 검증
         try {
             jwtUtil.isExpired(token);
         } catch (ExpiredJwtException e) {
@@ -60,6 +60,12 @@ public class JwtFilter extends OncePerRequestFilter {
             response.setContentType("application/json;charset=UTF-8");
             PrintWriter writer = response.getWriter();
             writer.print("{\"error\": \"access token expired\"}");
+            return;
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            PrintWriter writer = response.getWriter();
+            writer.print("{\"error\": \"invalid token\"}");
             return;
         }
 
