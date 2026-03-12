@@ -3,7 +3,9 @@ package com.example.WaffleBear.chat.model.dto;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.model.User;
+import lombok.Builder;
 import lombok.Getter;
+import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,4 +31,44 @@ public class ChatRoomsDto {
                     .build();
         }
     }
+    @Getter
+    @Builder
+    public static class PageRes {
+        private List<ListRes> boardList;
+        private int totalPage;
+        private long totalCount;
+        private int currentPage;
+        private int currentSize;
+
+        public static PageRes from(Page<ChatRooms> result) {
+            return PageRes.builder()
+                    .boardList(result.get().map(ChatRoomsDto.ListRes::from).toList())
+                    .totalPage(result.getTotalPages())
+                    .totalCount(result.getTotalElements())
+                    .currentPage(result.getPageable().getPageNumber())
+                    .currentSize(result.getPageable().getPageSize())
+                    .build();
+        }
+    }
+
+    @Builder
+    @Getter
+    public static class ListRes {
+        private Long idx;
+        private String title;
+        private String lastMessage;
+        private LocalDateTime lastMessageTime;
+        private int participantCount;
+
+        public static ListRes from(ChatRooms entity) {
+            return ListRes.builder()
+                    .idx(entity.getIdx())
+                    .title(entity.getTitle())
+                    .lastMessage(entity.getLastMessage())
+                    .lastMessageTime(entity.getLastMessageTime())
+                    .participantCount(entity.getParticipants() != null ? entity.getParticipants().size() : 0)
+                    .build();
+        }
+    }
+
 }
