@@ -19,6 +19,7 @@ import java.util.List;
 @RequestMapping("/chatRoom")
 public class ChatRoomController {
     private final ChatRoomService chatRoomService;
+    private final ParticipantsRepository participantsRepository;
 
     @PostMapping("/create")
     public ResponseEntity<Long> createRoom(
@@ -54,6 +55,10 @@ public class ChatRoomController {
                                @AuthenticationPrincipal AuthUserDetails user){
         chatRoomService.exit(roomIdx, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success("성공"));
+    }
+
+    public boolean isMember(Long roomId, Long userIdx) {
+        return participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, userIdx);
     }
 
 }

@@ -1,48 +1,102 @@
 package com.example.WaffleBear.config;
 
 
+import com.example.WaffleBear.chat.ChatRoomService;
 import com.example.WaffleBear.config.interceptor.CheckRoomAuthInterceptor;
 import com.example.WaffleBear.config.interceptor.JwtHandshakeInterceptor;
+import com.example.WaffleBear.user.model.AuthUserDetails;
+import com.example.WaffleBear.utils.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.messaging.simp.stomp.StompCommand;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.List;
+
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
-    private final WebSocketHandler webSocketHandler;
-    private final JwtHandshakeInterceptor jwtHandshakeInterceptor;
-    private final CheckRoomAuthInterceptor checkRoomAuthInterceptor;
+
+    private final ChatRoomService chatRoomService;
+    private final JwtUtil jwtUtil;
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws")
-//                  .addInterceptors(jwtHandshakeInterceptor)
-                .setAllowedOrigins("*");
-        // 웹 브라우저에서 WS 프로토콜을 지원하지 않는 경우 WS 대신에 HTTP로 통신할 수 있게 해주는 라이브러리를 사용할 때 설정
-        //.withSockJS();
+        registry.addEndpoint("/ws-stomp")
+                .setAllowedOrigins("http://localhost:5173")
+                .withSockJS();
     }
-
-//    @Override
-//    public void configureClientInboundChannel(ChannelRegistration registration) {
-//        registration.interceptors(checkRoomAuthInterceptor);
-//    }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic"); // 구독자가 메시지를 받을 경로의 시작 부분
-        registry.setApplicationDestinationPrefixes("/app"); // 클라이언트가 메시지를 보낼 때 사용할 주소의 시작 부분
-        registry.setUserDestinationPrefix("/user"); // 특정 사용자에게 메시지를 보낼 때 사용할 주소의 시작 부분
+        registry.enableSimpleBroker("/sub");
+        registry.setApplicationDestinationPrefixes("/pub");
     }
-//    @Override
-//    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-//        registry.addHandler(webSocketHandler, "/ws")
-//                .setAllowedOrigins("*")
-//                .addInterceptors(jwtHandshakeInterceptor);
-//    }
 
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(new ChannelInterceptor() {
+            @Override
+            public Message<?> preSend(Message<?> message, MessageChannel channel) {
+                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+
+                // CONNECT 시 토큰 파싱해서 유저 등록
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    String token = accessor.getFirstNativeHeader("Authorization");
+                    if (token != null && token.startsWith("Bearer ")) {
+                        token = token.replace("Bearer ", "");
+                        try {
+                            Long idx = jwtUtil.getUserIdx(token);
+                            String email = jwtUtil.getEmail(token);
+                            String role = jwtUtil.getRole(token);
+
+                            AuthUserDetails user = AuthUserDetails.builder()
+                                    .idx(idx).email(email).role(role).build();
+
+                            Authentication auth = new UsernamePasswordAuthenticationToken(
+                                    user, null, List.of(new SimpleGrantedAuthority(role)));
+
+                            accessor.setUser(auth); // ← 핵심
+                        } catch (Exception e) {
+                            throw new RuntimeException("유효하지 않은 토큰입니다.");
+                        }
+                    }
+                }
+
+                // SUBSCRIBE 시 권한 확인
+                if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    String destination = accessor.getDestination();
+                    if (destination != null && destination.startsWith("/sub/chat/room/")) {
+                        Long roomId = Long.parseLong(destination.replace("/sub/chat/room/", ""));
+
+                        Authentication auth = (Authentication) accessor.getUser();
+                        if (auth != null && auth.getPrincipal() instanceof AuthUserDetails user) {
+                            if (!chatRoomService.isMember(roomId, user.getIdx())) {
+                                throw new RuntimeException("채팅방 접근 권한이 없습니다.");
+                            }
+                        } else {
+                            throw new RuntimeException("인증되지 않은 사용자입니다.");
+                        }
+                    }
+                }
+
+                return message;
+            }
+        });
+
+    }
 }
