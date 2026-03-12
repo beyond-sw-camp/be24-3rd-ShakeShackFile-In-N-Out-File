@@ -91,6 +91,7 @@ public class FileInfoDto {
         private LocalDateTime uploadDate;
         private LocalDateTime lastModifyDate;
         private String presignedDownloadUrl;
+        private String thumbnailPresignedUrl;
         private Integer presignedUrlExpiresIn;
     }
 

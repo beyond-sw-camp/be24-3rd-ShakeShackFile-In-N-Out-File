@@ -14,7 +14,9 @@ import io.minio.ComposeSource;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectsArgs;
+import io.minio.StatObjectArgs;
 import io.minio.Result;
 import io.minio.http.Method;
 import io.minio.messages.DeleteObject;
@@ -23,9 +25,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -45,6 +50,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private final FileUpDownloadRepository fileUpDownloadRepository;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
+    private final VideoThumbnailService videoThumbnailService;
 
     private static final long MAX_SIZE_BYTES = 5L * 1024 * 1024 * 1024;
     private static final long PARTITION_SIZE_BYTES = 100L * 1024 * 1024;
@@ -54,6 +60,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
     private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
     private static final int MAX_TEXT_PREVIEW_BYTES = 64 * 1024;
+    private static final String THUMBNAIL_DIRECTORY_NAME = "thumbnails";
 
     @Override
     public List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests) {
@@ -732,7 +739,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private void removeMinioObjects(List<FileInfo> files) {
         List<DeleteObject> deleteTargets = files.stream()
                 .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
-                .map(FileInfo::getFileSavePath)
+                .flatMap(file -> buildFileObjectKeysForRemoval(file).stream())
                 .filter(path -> path != null && !path.isBlank())
                 .distinct()
                 .map(DeleteObject::new)
@@ -831,6 +838,134 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private String generatePresignedThumbnailUrl(FileInfo entity) {
+        if (resolveNodeType(entity) != FileNodeType.FILE || !isVideoFile(entity.getFileFormat())) {
+            return null;
+        }
+
+        String objectKey = entity.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+
+        String thumbnailObjectKey = buildThumbnailObjectKey(objectKey);
+        try {
+            if (!objectExists(thumbnailObjectKey)) {
+                ensureVideoThumbnail(entity, thumbnailObjectKey);
+            }
+
+            if (!objectExists(thumbnailObjectKey)) {
+                return null;
+            }
+
+            return generatePresignedGetUrl(thumbnailObjectKey);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void ensureVideoThumbnail(FileInfo entity, String thumbnailObjectKey) {
+        String objectKey = entity.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank() || !videoThumbnailService.supports(entity.getFileFormat())) {
+            return;
+        }
+
+        Path tempVideoPath = null;
+        try {
+            tempVideoPath = Files.createTempFile("wafflebear-video-", "." + entity.getFileFormat());
+            try (var objectStream = minioClient.getObject(
+                    GetObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .build()
+            )) {
+                Files.copy(objectStream, tempVideoPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            byte[] thumbnailBytes = videoThumbnailService.createThumbnail(tempVideoPath);
+            if (thumbnailBytes == null || thumbnailBytes.length == 0) {
+                return;
+            }
+
+            try (ByteArrayInputStream inputStream = new ByteArrayInputStream(thumbnailBytes)) {
+                minioClient.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(minioProperties.getBucket_cloud())
+                                .object(thumbnailObjectKey)
+                                .stream(inputStream, thumbnailBytes.length, -1)
+                                .contentType("image/jpeg")
+                                .build()
+                );
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (tempVideoPath != null) {
+                try {
+                    Files.deleteIfExists(tempVideoPath);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    private boolean objectExists(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return false;
+        }
+
+        try {
+            minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .build()
+            );
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private String generatePresignedGetUrl(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+
+        try {
+            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(minioProperties.getBucket_cloud())
+                    .object(objectKey)
+                    .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                    .build());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private List<String> buildFileObjectKeysForRemoval(FileInfo entity) {
+        List<String> objectKeys = new ArrayList<>();
+        String fileObjectKey = entity.getFileSavePath();
+        if (fileObjectKey != null && !fileObjectKey.isBlank()) {
+            objectKeys.add(fileObjectKey);
+            if (isVideoFile(entity.getFileFormat())) {
+                objectKeys.add(buildThumbnailObjectKey(fileObjectKey));
+            }
+        }
+
+        return objectKeys;
+    }
+
+    private String buildThumbnailObjectKey(String objectKey) {
+        int pathSeparatorIndex = objectKey.lastIndexOf('/');
+        String directory = pathSeparatorIndex >= 0 ? objectKey.substring(0, pathSeparatorIndex + 1) : "";
+        String fileName = pathSeparatorIndex >= 0 ? objectKey.substring(pathSeparatorIndex + 1) : objectKey;
+        int extensionIndex = fileName.lastIndexOf('.');
+        String baseName = extensionIndex >= 0 ? fileName.substring(0, extensionIndex) : fileName;
+
+        return directory + THUMBNAIL_DIRECTORY_NAME + "/" + baseName + ".jpg";
     }
 
     private String normalizeFormat(String rawFormat, String originName) {
@@ -937,6 +1072,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .uploadDate(entity.getUploadDate())
                 .lastModifyDate(entity.getLastModifyDate())
                 .presignedDownloadUrl(generatePresignedDownloadUrl(entity))
+                .thumbnailPresignedUrl(generatePresignedThumbnailUrl(entity))
                 .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
                 .build();
     }
@@ -1009,6 +1145,11 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
 
         return "other";
+    }
+
+    private boolean isVideoFile(String fileFormat) {
+        String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
+        return Set.of("mp4", "mov", "avi", "mkv", "wmv", "webm", "m4v", "mpeg", "mpg", "ogv", "3gp").contains(extension);
     }
 
     private boolean isTextPreviewable(String fileFormat) {
