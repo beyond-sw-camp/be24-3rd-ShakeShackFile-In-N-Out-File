@@ -48,6 +48,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity handleGeneralException(Exception e) {
+        e.printStackTrace(); // ← 추가
+        System.out.println("=== 예외 발생: " + e.getMessage()); // ← 추가
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(BaseResponse.fail(BaseResponseStatus.FAIL));
@@ -62,4 +64,5 @@ public class GlobalExceptionHandler {
 
         return 400;
     }
+
 }

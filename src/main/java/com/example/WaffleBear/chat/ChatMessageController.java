@@ -8,9 +8,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
 
 @RestController
 @RequiredArgsConstructor
@@ -22,13 +26,15 @@ public class ChatMessageController {
     /**
      * 1. 특정 채팅방의 메시지 목록 조회 (HTTP)
      */
-    @GetMapping("/{roomIdx}")
+    @GetMapping("/{roomIdx}/history")
     public BaseResponse list(
             @AuthenticationPrincipal AuthUserDetails user, // 유저 확인이 필요한 경우 추가
             @PathVariable Long roomIdx,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
+        System.out.println("=== /chat/" + roomIdx + " 호출 ===");
+        System.out.println("user: " + user);  // null이면 JWT 필터 문제
         ChatMessagesDto.PageRes dto = chatMessageService.getMessageList(roomIdx,user.getIdx(), page, size);
         return BaseResponse.success(ResponseEntity.ok(dto));
     }
@@ -40,13 +46,24 @@ public class ChatMessageController {
     @MessageMapping("/chat/{roomIdx}")
     public void sendMessage(
             @DestinationVariable Long roomIdx,
-            @AuthenticationPrincipal AuthUserDetails user, // 로그인한 유저 정보 활용
-            ChatMessagesDto.Send req) {
+            @Payload ChatMessagesDto.Send req,
+            Principal principal) {
 
+        Authentication auth = (Authentication) principal;
+        AuthUserDetails user = (AuthUserDetails) auth.getPrincipal();
+        System.out.println("=== 메시지 저장 시도 ===");
+        System.out.println("roomIdx: " + roomIdx);
+        System.out.println("userIdx: " + user.getIdx());
+        System.out.println("message: " + req.getContents());
+
+        if (user == null || user.getIdx() == null) {
+            // 인증 정보가 없으면 처리 중단
+            return;
+        }
         // user.getIdx()를 사용하여 실제 작성자 정보를 서비스에 전달
         ChatMessagesDto.ListRes savedMsg = chatMessageService.saveMessage(roomIdx, req, user.getIdx());
 
         // 해당 방 구독자들에게 실시간 전송
-        messagingTemplate.convertAndSend("/topic/" + roomIdx, savedMsg);
+        messagingTemplate.convertAndSend("/sub/chat/room/" + roomIdx, savedMsg);
     }
 }
