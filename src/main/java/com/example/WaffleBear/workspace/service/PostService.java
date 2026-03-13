@@ -4,6 +4,7 @@ import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.email.EmailVerifyRepository;
 import com.example.WaffleBear.email.EmailVerifyService;
+import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.workspace.model.post.Post;
@@ -88,30 +89,40 @@ public class PostService {
             return Optional.of(BaseResponse.fail(REQUEST_ERROR));
         }
     }
-    public Optional<BaseResponse> invite(String uuid, String email) {
+    public Optional<BaseResponse> invite(String uuid, String email, AuthUserDetails user) {
 
         Post post = pr.findByUUID(uuid).orElseThrow(
                 () -> new RuntimeException("파일이 없습니다.")
         );
-        User user = ur.findByEmail(email).orElseThrow(
-                () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
-        );
+        if(!post.getType()) {
+            throw new RuntimeException("파일의 권한이 없습니다.");
+        }
 
-        if(email != null) {
-            ur.findByEmail(user.getEmail()).orElseThrow(
+        if(email != null || post.getStatus() == isShare.Public) {
+            User check_user = ur.findByEmail(email).orElseThrow(
+                    () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
+            );
+            if(post.getStatus() != isShare.Public) {
+                throw new RuntimeException("파일의 권한이 없습니다.");
+            }
+
+            ur.findByEmail(check_user.getEmail()).orElseThrow(
                     () -> new RuntimeException("아이디가 없습니다. 회원가입을 하세요.")
             );
 
             evr.save(new EmailVerify(uuid, email));
-            evs.sendVerificationEmail(email, user.getName(), uuid);
+            evs.sendVerificationEmail(email, check_user.getName(), uuid);
             return Optional.of(BaseResponse.success("초대 성공"));
         }
+        User check_user = ur.findByEmail(user.getEmail()).orElseThrow(
+                () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
+        );
 
-        Optional<UserPost> result = upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), post.getIdx());
+        Optional<UserPost> result = upr.findByUser_IdxAndWorkspace_Idx(check_user.getIdx(), post.getIdx());
 
-        if (post.getStatus() != isShare.Private && !result.isPresent()) {
+        if (post.getStatus() == isShare.Public && !result.isPresent()) {
             upr.save(UserPost.builder()
-                    .user(user)
+                    .user(check_user)
                     .workspace(post)
                     .Level(AccessRole.READ)
                     .build()
@@ -137,17 +148,27 @@ public class PostService {
             evr.delete(verificationToken);
             throw new RuntimeException("거절하였습니다.");
         }
+        Post result = pr.findByUUID(uuid).orElseThrow(
+                () -> new RuntimeException("파일의 공유가 꺼졌습니다.")
+        );
+        if(upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx()).isPresent()) {
+            evr.delete(verificationToken);
+            throw new RuntimeException("해당 유저는 이미 있습니다.");
+        }
 
         // 3. 인증 완료된 토큰 삭제 (재사용 방지)
         evr.delete(verificationToken);
-        upr.save(UserPost.builder()
-                .user(user)
-                .workspace(pr.findByUUID(uuid).orElseThrow())
-                .Level(AccessRole.READ)
-                .build()
-        );
+        if (result.getStatus() != isShare.Private) {
+            upr.save(UserPost.builder()
+                    .user(user)
+                    .workspace(pr.findByUUID(uuid).orElseThrow())
+                    .Level(AccessRole.READ)
+                    .build()
+            );
+            return Optional.of(BaseResponse.success("초대 성공"));
+        }
 
-        return Optional.of(BaseResponse.success("초대 성공"));
+        return Optional.of(BaseResponse.fail(FAIL));
     }
 
     public void isShared(Long post_idx, Long check_user, PostDto.ReqType dto) {
