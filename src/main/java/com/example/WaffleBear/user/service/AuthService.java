@@ -1,7 +1,6 @@
 package com.example.WaffleBear.user.service;
 
 
-import com.example.WaffleBear.user.repository.RefreshTokenRepository;
 import com.example.WaffleBear.user.model.RefreshToken;
 import com.example.WaffleBear.user.model.TokenDto;
 import com.example.WaffleBear.user.model.User;
@@ -52,16 +51,11 @@ public class AuthService {
     @Transactional
     public TokenDto.AuthTokenResponse reissue(String refreshToken) {
         // 1. 토큰 존재 여부 확인
-        if (refreshToken == null) {
+        if (refreshToken == null || refreshToken.isBlank()) {
             throw new IllegalArgumentException("Refresh Token이 존재하지 않습니다.");
         }
 
-        // 2. 토큰 만료 여부 검증 (JwtUtil에 isExpired 메서드가 있다고 가정)
-        try {
-            jwtUtil.isExpired(refreshToken);
-        } catch (ExpiredJwtException e) {
-            throw new IllegalArgumentException("Refresh Token이 만료되었습니다.");
-        }
+        validateRefreshToken(refreshToken);
 
         // 3. 토큰 카테고리 검증 (Refresh Token이 맞는지 확인)
         String category = jwtUtil.getCategory(refreshToken);
@@ -86,11 +80,29 @@ public class AuthService {
             throw new IllegalArgumentException("User is not allowed to access.");
         }
 
-        String newAccess = jwtUtil.createToken("access", userId, email, name, role, 600000L); // 10분
-        String newRefresh = jwtUtil.createToken("refresh", userId, email, name, role, 1209600000L); // 14일
+        String resolvedUserId = jwtUtil.getId(refreshToken);
+        if (resolvedUserId == null || resolvedUserId.isBlank()) {
+            resolvedUserId = user.getEmail();
+        }
 
-        String newAccess = jwtUtil.createToken("access", user.getIdx(), resolvedUserId, email, user.getName(), user.getRole(), 600000L);
-        String newRefresh = jwtUtil.createToken("refresh", user.getIdx(), resolvedUserId, email, user.getName(), user.getRole(), 1209600000L);
+        String newAccess = jwtUtil.createToken(
+                "access",
+                user.getIdx(),
+                resolvedUserId,
+                user.getEmail(),
+                user.getName(),
+                user.getRole(),
+                600000L
+        );
+        String newRefresh = jwtUtil.createToken(
+                "refresh",
+                user.getIdx(),
+                resolvedUserId,
+                user.getEmail(),
+                user.getName(),
+                user.getRole(),
+                1209600000L
+        );
 
         dbToken.updateToken(newRefresh, LocalDateTime.now().plusDays(14));
 
@@ -99,5 +111,17 @@ public class AuthService {
 
     private UserAccountStatus resolveStatus(User user) {
         return user.getAccountStatus() == null ? UserAccountStatus.ACTIVE : user.getAccountStatus();
+    }
+
+    private void validateRefreshToken(String refreshToken) {
+        try {
+            if (Boolean.TRUE.equals(jwtUtil.isExpired(refreshToken))) {
+                throw new IllegalArgumentException("Refresh Token이 만료되었습니다.");
+            }
+        } catch (ExpiredJwtException e) {
+            throw new IllegalArgumentException("Refresh Token이 만료되었습니다.");
+        } catch (JwtException e) {
+            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
+        }
     }
 }
