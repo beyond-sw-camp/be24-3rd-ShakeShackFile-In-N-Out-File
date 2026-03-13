@@ -33,10 +33,11 @@ public enum BaseResponseStatus {
     // 4000번대
     REQUEST_ERROR(false, 4001, "입력값이 잘못되었습니다."),
 
-
-
     // 5000번대 실패
-    FAIL(false, 5000, "요청이 실패했습니다");
+    FAIL(false, 5000, "요청이 실패했습니다"),
+
+    // 6000번대 실패
+    INVALID_EMAIL_FORMAT(false, 6001, "이메일형식이 잘못되었습니다.");
 
     private final boolean success;
     private final int code;

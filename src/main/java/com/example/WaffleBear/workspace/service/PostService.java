@@ -88,49 +88,68 @@ public class PostService {
             return Optional.of(BaseResponse.fail(REQUEST_ERROR));
         }
     }
-    public Optional<BaseResponse> invite(String uuid, Long check_user, String type) {
+    public Optional<BaseResponse> invite(String uuid, String email) {
 
         Post post = pr.findByUUID(uuid).orElseThrow(
                 () -> new RuntimeException("파일이 없습니다.")
         );
-        User user = ur.findById(check_user).orElseThrow(
+        User user = ur.findByEmail(email).orElseThrow(
                 () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
         );
 
-        switch (type) {
-            case "invite":
-            Optional<UserPost> result = upr.findByUser_IdxAndWorkspace_Idx(check_user, post.getIdx());
+        if(email != null) {
+            ur.findByEmail(user.getEmail()).orElseThrow(
+                    () -> new RuntimeException("아이디가 없습니다. 회원가입을 하세요.")
+            );
 
-            if (post.getStatus() != isShare.Private && !result.isPresent()) {
-                upr.save(UserPost.builder()
-                        .user(user)
-                        .workspace(post)
-                        .Level(AccessRole.READ)
-                        .build()
-                );
-                return Optional.of(BaseResponse.success("초대 성공"));
-            }
-            return Optional.empty();
-
-            case "email":
-                evr.save(new EmailVerify(uuid, user.getEmail()));
-
-                evs.sendVerificationEmail(user.getEmail(), user.getName(), uuid);
+            evr.save(new EmailVerify(uuid, email));
+            evs.sendVerificationEmail(email, user.getName(), uuid);
+            return Optional.of(BaseResponse.success("초대 성공"));
         }
-        return null;
-    }
-    public Optional<BaseResponse> verifyEmail(String uuid) {
-        EmailVerify verificationToken = evr.findByToken(uuid)
-                .orElseThrow(() -> new RuntimeException("유효하지 않은 토큰입니다."));
 
-        if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+        Optional<UserPost> result = upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), post.getIdx());
+
+        if (post.getStatus() != isShare.Private && !result.isPresent()) {
+            upr.save(UserPost.builder()
+                    .user(user)
+                    .workspace(post)
+                    .Level(AccessRole.READ)
+                    .build()
+            );
+            return Optional.of(BaseResponse.success("초대 성공"));
+        }
+        return Optional.empty();
+    }
+
+    public Optional<BaseResponse> verifyEmail(User user, String uuid, String type) {
+
+        EmailVerify verificationToken = evr.findByToken(uuid).orElseThrow(
+                () -> new RuntimeException("유효하지 않은 토큰입니다.")
+        );
+
+        if(!verificationToken.getEmail().equals(user.getEmail())) {
+            throw new RuntimeException("인증되지 않은 사용자입니다.");
+        }else if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            evr.delete(verificationToken);
             throw new RuntimeException("토큰이 만료되었습니다.");
         }
+        if(type.equals("reject")) {
+            evr.delete(verificationToken);
+            throw new RuntimeException("거절하였습니다.");
+        }
+
         // 3. 인증 완료된 토큰 삭제 (재사용 방지)
         evr.delete(verificationToken);
+        upr.save(UserPost.builder()
+                .user(user)
+                .workspace(pr.findByUUID(uuid).orElseThrow())
+                .Level(AccessRole.READ)
+                .build()
+        );
 
         return Optional.of(BaseResponse.success("초대 성공"));
     }
+
     public void isShared(Long post_idx, Long check_user, PostDto.ReqType dto) {
 
 
@@ -141,6 +160,7 @@ public class PostService {
 
         pr.save(result.getWorkspace());
     }
+
     public List<UserPostDto.ReqRole> loadRole(Long post_idx, Long user_idx) {
 
         UserPost result = upr.findByUser_IdxAndWorkspace_Idx(user_idx, post_idx)

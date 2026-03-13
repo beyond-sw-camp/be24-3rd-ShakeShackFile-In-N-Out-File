@@ -40,7 +40,7 @@ public class EmailVerifyService {
         }
     }
     @Async
-    public void sendVerificationEmail(String email, String username, String token) {
+    public void sendVerificationEmail(String email, String username, String uuid) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -49,18 +49,22 @@ public class EmailVerifyService {
             helper.setSubject("[WaffleBear] " + username + "님께서 워크스페이스에 초대하셨습니다.");
 
             // 베이스 URL 설정
-            String baseUrl = "http://localhost:8080/workspace/verify?token=" + token;
+            String baseUrl = "http://localhost:5173/workspace/verify?uuid=" + uuid;
             String acceptLink = baseUrl + "&type=accept"; // 쿼리 파라미터 방식 권장
             String rejectLink = baseUrl + "&type=reject";
 
             String htmlContent = String.format(
-                    "<div style='text-align: center; border: 1px solid #ddd; padding: 20px;'>" +
-                            "<h1>%s님께서 워크스페이스에 초대하셨습니다.</h1>" +
-                            "<p>초대에 응하시려면 아래 버튼을 클릭해주세요.</p>" +
-                            "<div style='margin-top: 20px;'>" +
-                            "<a href='%s' style='background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-right: 10px;'>수락하기</a>" +
-                            "<a href='%s' style='background-color: #f44336; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;'>거절하기</a>" +
-                            "</div>" +
+                    "<div style='font-family: \"Apple SD Gothic Neo\", sans-serif; max-width: 500px; margin: 0 auto; padding: 40px; border: 1px solid #f0f0f0; border-radius: 16px; text-align: center; color: #333;'>" +
+                            "  <div style='font-size: 40px; margin-bottom: 20px;'>🧇</div>" +
+                            "  <h1 style='font-size: 24px; font-weight: 700; margin-bottom: 10px;'>워크스페이스 초대</h1>" +
+                            "  <p style='font-size: 16px; line-height: 1.6; color: #666; margin-bottom: 30px;'>" +
+                            "    <strong>%s</strong>님께서 당신을<br>WaffleBear 워크스페이스로 초대하셨습니다." +
+                            "  </p>" +
+                            "  <div style='display: flex; justify-content: center; gap: 10px;'>" +
+                            "    <a href='%s' style='display: inline-block; background-color: #3B82F6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);'>초대 수락하기</a>" +
+                            "    <a href='%s' style='display: inline-block; background-color: #F3F4F6; color: #4B5563; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 15px; margin-left: 10px;'>거절</a>" +
+                            "  </div>" +
+                            "  <p style='margin-top: 30px; font-size: 13px; color: #999;'>이 초대는 보안을 위해 일정 시간이 지나면 만료될 수 있습니다.</p>" +
                             "</div>",
                     username, acceptLink, rejectLink
             );
