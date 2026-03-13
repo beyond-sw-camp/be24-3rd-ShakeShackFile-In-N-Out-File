@@ -1,7 +1,11 @@
 package com.example.WaffleBear.config.interceptor;
 
 
+import com.example.WaffleBear.chat.ChatRoomService;
 import com.example.WaffleBear.user.model.AuthUserDetails;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -10,35 +14,40 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.HandlerMapping;
 
 import java.util.List;
 import java.util.Map;
 
 @Component
-public class CheckRoomAuthInterceptor implements ChannelInterceptor {
+@RequiredArgsConstructor
+public class CheckRoomAuthInterceptor implements HandlerInterceptor {
+    private final ChatRoomService chatroomService;
+
     @Override
-    public @Nullable Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-        if(StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-            String path = accessor.getDestination();
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // PathVariable에서 roomId 추출 (예: /chat/room/{roomId})
+        Map<String, String> pathVariables = (Map<String, String>) request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+        String roomIdStr = pathVariables != null ? pathVariables.get("id") : null;
 
-            Map<String, Object> attributes =  accessor.getSessionAttributes();
+        if (roomIdStr == null) {
+            // 초대 로직 등에서 body에 roomId가 있는 경우 처리 (단, 여기서는 PathVariable 위주로 예시)
+            return true;
+        }
 
-            Authentication authentication = (Authentication)attributes.get("user");
-            AuthUserDetails user = (AuthUserDetails)authentication.getPrincipal();
+        Long roomId = Long.parseLong(roomIdStr);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-            if(path.startsWith("/topic/")) {
-                String roomIdx = path.substring("/topic/".length());
-
-                List<Long> roomIdxList = List.of(3L, 4L);
-                Long requestRoomIdx = Long.parseLong(roomIdx);
-                if(!roomIdxList.contains(requestRoomIdx)) {
-                    throw new IllegalArgumentException();
-                }
+        if (auth != null && auth.getPrincipal() instanceof AuthUserDetails user) {
+            if (chatroomService.isMember(roomId, user.getIdx())) {
+                return true;
             }
         }
 
-        return message;
+        response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access Denied: Not a member of this chat room.");
+        return false;
     }
 }

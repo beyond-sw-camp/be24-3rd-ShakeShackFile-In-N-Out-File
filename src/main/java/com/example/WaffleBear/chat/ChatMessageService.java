@@ -21,12 +21,13 @@ public class ChatMessageService {
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
 
+
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
         ChatRooms room = chatRoomRepository.findById(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
 
-        boolean isParticipant = participantsRepository.existsByChatRoomsAndUsersIdx(room, userIdx);
+        boolean isParticipant = participantsRepository.existsByChatRoomsIdxAndUsersIdx(room.getIdx(), userIdx);
 
         if (!isParticipant) {
             throw new RuntimeException("해당 채팅방에 접근 권한이 없습니다.");
