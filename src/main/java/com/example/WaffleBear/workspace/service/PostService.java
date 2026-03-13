@@ -89,8 +89,10 @@ public class PostService {
             return Optional.of(BaseResponse.fail(REQUEST_ERROR));
         }
     }
+
     public Optional<BaseResponse> invite(String uuid, String email, AuthUserDetails user) {
 
+        // 게시글 존재 여부
         Post post = pr.findByUUID(uuid).orElseThrow(
                 () -> new RuntimeException("파일이 없습니다.")
         );
@@ -98,11 +100,11 @@ public class PostService {
             throw new RuntimeException("파일의 권한이 없습니다.");
         }
 
-        if(email != null || post.getStatus() == isShare.Public) {
+        // 공유(Shared)일 경우
+        if(email != null && post.getStatus() == isShare.Shared) {
             User check_user = ur.findByEmail(email).orElseThrow(
-                    () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
+                    () -> new RuntimeException("해당하는 유저가 없습니다.")
             );
-
             ur.findByEmail(check_user.getEmail()).orElseThrow(
                     () -> new RuntimeException("아이디가 없습니다. 회원가입을 하세요.")
             );
@@ -111,6 +113,8 @@ public class PostService {
             evs.sendVerificationEmail(email, check_user.getName(), uuid);
             return Optional.of(BaseResponse.success("초대 성공"));
         }
+
+        // 공개(Public)일 경우
         User check_user = ur.findByEmail(user.getEmail()).orElseThrow(
                 () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
         );
