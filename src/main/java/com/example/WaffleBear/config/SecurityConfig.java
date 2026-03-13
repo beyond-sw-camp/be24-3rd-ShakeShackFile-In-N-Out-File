@@ -53,7 +53,8 @@ public class SecurityConfig {
 
         // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/ws-stomp/**","/ws-stomp/info", "/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue").permitAll()
+                .requestMatchers("/administrator/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue").permitAll()
                 .anyRequest().authenticated()
         );
 
@@ -61,6 +62,7 @@ public class SecurityConfig {
         http.addFilterBefore(loginFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
+    //호
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
