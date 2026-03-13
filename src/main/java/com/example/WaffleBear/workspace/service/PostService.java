@@ -102,9 +102,6 @@ public class PostService {
             User check_user = ur.findByEmail(email).orElseThrow(
                     () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
             );
-            if(post.getStatus() != isShare.Public) {
-                throw new RuntimeException("파일의 권한이 없습니다.");
-            }
 
             ur.findByEmail(check_user.getEmail()).orElseThrow(
                     () -> new RuntimeException("아이디가 없습니다. 회원가입을 하세요.")
