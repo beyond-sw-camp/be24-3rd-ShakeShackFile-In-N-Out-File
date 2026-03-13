@@ -72,12 +72,13 @@ public class PostController {
             @RequestParam("uuid") String uuid,
             @RequestParam(value = "email", required = false) String email) {
 
+        System.out.println(uuid);
         // 이메일에 kakao.social이 포함되어 있다면 바로 실패 응답
         if (email != null && email.contains("@kakao.social")) {
             return BaseResponse.fail(BaseResponseStatus.INVALID_EMAIL_FORMAT); // "유효하지 않은 이메일 형식입니다" 등의 상태값
         }
 
-        Optional<BaseResponse> result = ps.invite(uuid, email);
+        Optional<BaseResponse> result = ps.invite(uuid, email, user);
 
         if(result.isPresent()) {
             return BaseResponse.success("초대 성공");

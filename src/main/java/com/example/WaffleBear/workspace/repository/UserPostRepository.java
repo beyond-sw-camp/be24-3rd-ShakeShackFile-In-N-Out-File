@@ -1,5 +1,6 @@
 package com.example.WaffleBear.workspace.repository;
 
+import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -12,5 +13,7 @@ public interface UserPostRepository extends JpaRepository<UserPost, Long> {
 
     // 또는 2. 해당 유저의 모든 권한 리스트를 가져옴
     List<UserPost> findAllByWorkspace_idx(Long post_idx);
+
+    Optional<UserPost> findByUser(User user);
 
 }
