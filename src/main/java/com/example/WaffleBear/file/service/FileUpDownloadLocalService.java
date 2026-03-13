@@ -136,6 +136,11 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
     }
 
     @Override
+    public FileInfoDto.FileActionRes abortUpload(Long userIdx, FileInfoDto.AbortReq request) {
+        throw new UnsupportedOperationException("Local service currently does not support abort upload operations.");
+    }
+
+    @Override
     public FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx) {
         throw new UnsupportedOperationException("Local service currently does not support storage summary operations.");
     }

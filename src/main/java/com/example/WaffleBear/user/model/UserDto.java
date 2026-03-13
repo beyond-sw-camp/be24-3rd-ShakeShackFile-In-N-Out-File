@@ -13,6 +13,7 @@ public class UserDto {
                     .password(password)
                     .enable(false)
                     .role("ROLE_USER")
+                    .accountStatus(UserAccountStatus.ACTIVE)
                     .build();
         }
     }
@@ -30,7 +31,7 @@ public class UserDto {
 
     @Builder
     public record OAuth(String email, String name, String provider, boolean enable, String role) {
-        public static OAuth from(Map<String, Object> attributes, String provider)  {
+        public static OAuth from(Map<String, Object> attributes, String provider) {
             if (provider.equals("google")) {
                 String email = (String) attributes.get("email");
                 String name = (String) attributes.get("name");
@@ -76,9 +77,11 @@ public class UserDto {
                     .password(provider)
                     .enable(enable)
                     .role(role)
+                    .accountStatus(UserAccountStatus.ACTIVE)
                     .build();
         }
     }
 
-    public record LoginReq(String email, String name, String password){}
+    public record LoginReq(String email, String name, String password) {
+    }
 }

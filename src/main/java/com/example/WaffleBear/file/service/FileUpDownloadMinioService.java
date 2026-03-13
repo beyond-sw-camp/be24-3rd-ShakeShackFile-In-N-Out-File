@@ -42,6 +42,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -59,8 +61,10 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private static final long BASIC_STORAGE_BYTES = 20L * 1024 * 1024 * 1024;
     private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
     private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
+    private static final long ADMIN_STORAGE_BYTES = 10L * 1024 * 1024 * 1024 * 1024;
     private static final int MAX_TEXT_PREVIEW_BYTES = 64 * 1024;
     private static final String THUMBNAIL_DIRECTORY_NAME = "thumbnails";
+    private final Set<String> thumbnailGenerationInProgress = ConcurrentHashMap.newKeySet();
 
     @Override
     public List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests) {
@@ -103,23 +107,43 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         String fileSaveName = extractObjectName(finalObjectKey);
         Long userIdx = resolveUserIdx();
 
-        composeFinalObject(finalObjectKey, chunkObjectKeys);
-        saveFinalFileInfo(
-                fileOriginName,
-                fileFormat,
-                fileSaveName,
-                finalObjectKey,
-                request.getFileSize(),
-                userIdx,
-                request.getParentId()
-        );
-        cleanupPartitionObjects(chunkObjectKeys);
+        try {
+            composeFinalObject(finalObjectKey, chunkObjectKeys);
+            saveFinalFileInfo(
+                    fileOriginName,
+                    fileFormat,
+                    fileSaveName,
+                    finalObjectKey,
+                    request.getFileSize(),
+                    userIdx,
+                    request.getParentId()
+            );
+            cleanupPartitionObjects(chunkObjectKeys);
+        } catch (RuntimeException exception) {
+            cleanupFailedPartitionUpload(userIdx, finalObjectKey, chunkObjectKeys);
+            throw exception;
+        }
 
         return FileInfoDto.CompleteRes.builder()
                 .fileOriginName(fileOriginName)
                 .fileSaveName(fileSaveName)
                 .fileFormat(fileFormat)
                 .finalObjectKey(finalObjectKey)
+                .build();
+    }
+
+    @Override
+    public FileInfoDto.FileActionRes abortUpload(Long userIdx, FileInfoDto.AbortReq request) {
+        int affectedCount = cleanupFailedPartitionUpload(
+                userIdx,
+                request != null ? request.getFinalObjectKey() : null,
+                request != null ? request.getChunkObjectKeys() : null
+        );
+
+        return FileInfoDto.FileActionRes.builder()
+                .targetIdx(null)
+                .action("abort-upload")
+                .affectedCount(affectedCount)
                 .build();
     }
 
@@ -786,10 +810,61 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     private void cleanupPartitionObjects(List<String> chunkObjectKeys) {
+        deleteObjectKeys(chunkObjectKeys);
+    }
+
+    private int cleanupFailedPartitionUpload(Long userIdx, String finalObjectKey, List<String> chunkObjectKeys) {
+        List<String> cleanupTargets = resolveAbortObjectKeys(userIdx, finalObjectKey, chunkObjectKeys);
+        deleteObjectKeys(cleanupTargets);
+        return cleanupTargets.size();
+    }
+
+    private List<String> resolveAbortObjectKeys(Long userIdx, String finalObjectKey, List<String> chunkObjectKeys) {
+        if (userIdx == null || userIdx <= 0) {
+            return List.of();
+        }
+
+        String objectPrefix = userIdx + "/";
+        List<String> cleanupTargets = new ArrayList<>();
+
+        if (chunkObjectKeys != null) {
+            chunkObjectKeys.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(key -> !key.isBlank())
+                    .filter(key -> key.startsWith(objectPrefix))
+                    .filter(key -> key.contains("/tmp/"))
+                    .distinct()
+                    .forEach(cleanupTargets::add);
+        }
+
+        if (finalObjectKey != null) {
+            String normalizedFinalObjectKey = finalObjectKey.trim();
+            if (!normalizedFinalObjectKey.isBlank() && normalizedFinalObjectKey.startsWith(objectPrefix)) {
+                cleanupTargets.add(normalizedFinalObjectKey);
+            }
+        }
+
+        return cleanupTargets.stream().distinct().toList();
+    }
+
+    private void deleteObjectKeys(List<String> objectKeys) {
+        if (objectKeys == null || objectKeys.isEmpty()) {
+            return;
+        }
+
         try {
-            List<DeleteObject> objects = chunkObjectKeys.stream()
+            List<DeleteObject> objects = objectKeys.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(key -> !key.isBlank())
+                    .distinct()
                     .map(DeleteObject::new)
                     .toList();
+
+            if (objects.isEmpty()) {
+                return;
+            }
 
             Iterable<Result<io.minio.messages.DeleteError>> results = minioClient.removeObjects(
                     RemoveObjectsArgs.builder()
@@ -853,10 +928,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         String thumbnailObjectKey = buildThumbnailObjectKey(objectKey);
         try {
             if (!objectExists(thumbnailObjectKey)) {
-                ensureVideoThumbnail(entity, thumbnailObjectKey);
-            }
-
-            if (!objectExists(thumbnailObjectKey)) {
+                triggerThumbnailGeneration(entity, thumbnailObjectKey);
                 return null;
             }
 
@@ -864,6 +936,30 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private void triggerThumbnailGeneration(FileInfo entity, String thumbnailObjectKey) {
+        if (thumbnailObjectKey == null || thumbnailObjectKey.isBlank()) {
+            return;
+        }
+
+        if (!videoThumbnailService.supports(entity.getFileFormat())) {
+            return;
+        }
+
+        if (!thumbnailGenerationInProgress.add(thumbnailObjectKey)) {
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (!objectExists(thumbnailObjectKey)) {
+                    ensureVideoThumbnail(entity, thumbnailObjectKey);
+                }
+            } finally {
+                thumbnailGenerationInProgress.remove(thumbnailObjectKey);
+            }
+        });
     }
 
     private void ensureVideoThumbnail(FileInfo entity, String thumbnailObjectKey) {
@@ -1089,7 +1185,11 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private StoragePlan resolveStoragePlan(String role) {
         String normalizedRole = role == null ? "" : role.toUpperCase(Locale.ROOT);
 
-        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE") || normalizedRole.contains("ADMIN")) {
+        if (normalizedRole.contains("ADMIN")) {
+            return new StoragePlan("ADMIN", "관리자", ADMIN_STORAGE_BYTES);
+        }
+
+        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE")) {
             return new StoragePlan("PREMIUM", "프리미엄", PREMIUM_STORAGE_BYTES);
         }
 

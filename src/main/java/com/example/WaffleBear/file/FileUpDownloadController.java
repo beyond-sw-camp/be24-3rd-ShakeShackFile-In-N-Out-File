@@ -34,6 +34,16 @@ public class FileUpDownloadController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/upload/abort")
+    public ResponseEntity<FileInfoDto.FileActionRes> abortUpload(
+            @AuthenticationPrincipal AuthUserDetails dto,
+            @RequestBody FileInfoDto.AbortReq request) {
+        Long userIdx = dto != null ? dto.getIdx() : 0L;
+        FileInfoDto.FileActionRes result = fileUpDownloadService.abortUpload(userIdx, request);
+
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping("/list")
     public ResponseEntity<List<FileInfoDto.FileListItemRes>> fileList(
             @AuthenticationPrincipal AuthUserDetails dto) {
