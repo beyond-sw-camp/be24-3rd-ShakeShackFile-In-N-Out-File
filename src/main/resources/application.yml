@@ -1,3 +1,5 @@
+portone:
+  portone_secret: ${PORTONE_SECRET}
 
 jwt:
   key: ${JWT_KEY}
