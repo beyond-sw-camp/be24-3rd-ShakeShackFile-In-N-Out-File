@@ -70,10 +70,14 @@ public class PostController {
     public BaseResponse invite(
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestParam("uuid") String uuid,
-            @RequestParam("type") String type) {
+            @RequestParam(value = "email", required = false) String email) {
 
-        Long check_user = user.getIdx();
-        Optional<BaseResponse> result = ps.invite(uuid, check_user, type);
+        // 이메일에 kakao.social이 포함되어 있다면 바로 실패 응답
+        if (email != null && email.contains("@kakao.social")) {
+            return BaseResponse.fail(BaseResponseStatus.INVALID_EMAIL_FORMAT); // "유효하지 않은 이메일 형식입니다" 등의 상태값
+        }
+
+        Optional<BaseResponse> result = ps.invite(uuid, email);
 
         if(result.isPresent()) {
             return BaseResponse.success("초대 성공");
@@ -83,20 +87,21 @@ public class PostController {
     }
     @GetMapping("/verify")
     public BaseResponse verifyEmail(
+            @AuthenticationPrincipal AuthUserDetails user,
             @RequestParam("uuid") String uuid,
             @RequestParam("type") String type) {
 
-        if(type != "email") {
+        User check_user = ur.findByEmail(user.getEmail()).orElseThrow(
+                () -> new RuntimeException("해당하는 유저가 아닙니다.")
+        );
+        Optional<BaseResponse> result = ps.verifyEmail(check_user, uuid, type);
 
-            Optional<BaseResponse> result = ps.verifyEmail(uuid);
-
-            if (result.isPresent()) {
-                return BaseResponse.success("성공");
-            } else {
-                return BaseResponse.fail(BaseResponseStatus.FAIL);
-            }
+        if (result.isPresent()) {
+            return BaseResponse.success("성공");
+        } else {
+            return BaseResponse.fail(BaseResponseStatus.FAIL);
         }
-        return null;
+
     }
 
     @PostMapping("/isShared/{idx}")
