@@ -36,7 +36,7 @@ public class ChatMessageController {
         System.out.println("=== /chat/" + roomIdx + " 호출 ===");
         System.out.println("user: " + user);  // null이면 JWT 필터 문제
         ChatMessagesDto.PageRes dto = chatMessageService.getMessageList(roomIdx,user.getIdx(), page, size);
-        return BaseResponse.success(ResponseEntity.ok(dto));
+        return BaseResponse.success(dto);
     }
 
     /**

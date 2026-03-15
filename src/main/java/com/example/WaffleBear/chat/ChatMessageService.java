@@ -33,7 +33,7 @@ public class ChatMessageService {
             throw new RuntimeException("해당 채팅방에 접근 권한이 없습니다.");
         }
         // Pageable 임포트 오류 해결 및 최신순 정렬
-        Pageable pageable = PageRequest.of(page, size, Sort.by("sendTime").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<ChatMessages> result = chatMessageRepository.findAllByChatRooms(room, pageable);
 
         return ChatMessagesDto.PageRes.from(result);
@@ -50,10 +50,7 @@ public class ChatMessageService {
         ChatMessages message = chatMessageRepository.save(req.toEntity(room, user));
 
         // ChatRooms 정보 업데이트
-        room.builder()
-                .lastMessage(message.getContents())
-                .lastMessageTime(message.getSendTime())
-                .build();
+        room.updateLastMessage(message.getContents(),message.getCreatedAt());
 
         // 전송용 응답 DTO 반환
         return ChatMessagesDto.ListRes.from(message);

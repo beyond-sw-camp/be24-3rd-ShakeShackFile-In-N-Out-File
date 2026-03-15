@@ -45,18 +45,28 @@ public class ChatRoomController {
 
     @GetMapping("/list")
     public ResponseEntity list(
+            @AuthenticationPrincipal AuthUserDetails user,
             @RequestParam(required = true, defaultValue = "0") int page,
             @RequestParam(required = true, defaultValue = "5") int size) {
-        ChatRoomsDto.PageRes dto = chatRoomService.list(page, size);
+        ChatRoomsDto.PageRes dto = chatRoomService.list(page, size, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success(dto));
     }
-    @DeleteMapping("/exit/{roomIdx}")
+    @DeleteMapping("/{roomIdx}/exit")
     public ResponseEntity exit(@PathVariable Long roomIdx,
                                @AuthenticationPrincipal AuthUserDetails user){
         chatRoomService.exit(roomIdx, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success("성공"));
     }
 
+    @PatchMapping("/{roomIdx}/title")
+    public ResponseEntity updateTitle(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long roomIdx,
+            @RequestBody ChatRoomsDto.UpdateTitleReq req) {
+
+        chatRoomService.updateRoomTitle(roomIdx, req.getTitle(), user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success("방 이름이 변경되었습니다."));
+    }
     public boolean isMember(Long roomId, Long userIdx) {
         return participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, userIdx);
     }
