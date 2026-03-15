@@ -1,5 +1,6 @@
 package com.example.WaffleBear.chat.model.dto;
 
+import com.example.WaffleBear.chat.ChatMessageRepository;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.model.User;
@@ -10,6 +11,7 @@ import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public class ChatRoomsDto {
     @Getter
@@ -41,10 +43,13 @@ public class ChatRoomsDto {
         private int totalPage;
         private long totalCount;
 
-        public static PageRes from(Page<ChatParticipants> result) {
+        public static PageRes from(Page<ChatParticipants> result, Map<Long, Long> unreadMap) {
             return PageRes.builder()
                     .boardList(result.getContent().stream()
-                            .map(ChatRoomsDto.ListRes::from) // 아래에서 수정할 ListRes.from 사용
+                            .map(p -> {
+                                long unread = unreadMap.getOrDefault(p.getChatRooms().getIdx(), 0L);
+                                return ChatRoomsDto.ListRes.from(p, unread);
+                            })
                             .toList())
                     .totalPage(result.getTotalPages())
                     .totalCount(result.getTotalElements())
@@ -60,9 +65,10 @@ public class ChatRoomsDto {
         private String lastMessage;
         private LocalDateTime lastMessageTime;
         private int participantCount;
+        private long unreadCount;
 
         // ChatParticipants 엔티티를 전달받아 데이터를 가공합니다.
-        public static ListRes from(ChatParticipants participant) {
+        public static ListRes from(ChatParticipants participant, long unreadCount) {
             ChatRooms room = participant.getChatRooms();
 
             // 1. 개인 설정 이름이 있으면 사용, 없으면 방의 기본 제목 사용
@@ -76,6 +82,7 @@ public class ChatRoomsDto {
                     .lastMessage(room.getLastMessage())
                     .lastMessageTime(room.getLastMessageTime())
                     .participantCount(room.getParticipants() != null ? room.getParticipants().size() : 0)
+                    .unreadCount(unreadCount)
                     .build();
         }
     }

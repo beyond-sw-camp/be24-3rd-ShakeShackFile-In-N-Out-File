@@ -66,4 +66,12 @@ public class ChatMessageController {
         // 해당 방 구독자들에게 실시간 전송
         messagingTemplate.convertAndSend("/sub/chat/room/" + roomIdx, savedMsg);
     }
+
+    @PostMapping("/{roomIdx}/read")
+    public ResponseEntity read(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long roomIdx) {
+        chatMessageService.markAsRead(roomIdx, user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success("읽음 처리 완료"));
+    }
 }

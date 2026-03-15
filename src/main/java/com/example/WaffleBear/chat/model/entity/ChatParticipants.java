@@ -37,5 +37,8 @@ public class ChatParticipants {
     /** 마지막으로 읽은 메시지 번호: 안 읽은 메시지 계산용 */
     private Long lastReadMessageId;
 
+    public void updateLastReadMessageId(Long messageId) {
+        this.lastReadMessageId = messageId;
+    }
 }
 

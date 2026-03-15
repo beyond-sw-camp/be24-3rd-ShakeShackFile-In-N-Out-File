@@ -2,6 +2,7 @@ package com.example.WaffleBear.chat;
 
 import com.example.WaffleBear.chat.model.dto.ChatMessagesDto;
 import com.example.WaffleBear.chat.model.entity.ChatMessages;
+import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
@@ -54,5 +55,15 @@ public class ChatMessageService {
 
         // 전송용 응답 DTO 반환
         return ChatMessagesDto.ListRes.from(message);
+    }
+    @Transactional
+    public void markAsRead(Long roomIdx, Long userIdx) {
+        ChatParticipants participant = participantsRepository
+                .findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
+                .orElseThrow(() -> new RuntimeException("참여자 정보 없음"));
+
+        // 해당 방의 마지막 메시지 idx 조회
+        chatMessageRepository.findTopByChatRoomsIdxOrderByCreatedAtDesc(roomIdx)
+                .ifPresent(msg -> participant.updateLastReadMessageId(msg.getIdx()));
     }
 }

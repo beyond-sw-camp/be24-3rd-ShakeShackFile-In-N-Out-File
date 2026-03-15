@@ -9,12 +9,15 @@ import com.example.WaffleBear.user.model.User;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -24,6 +27,7 @@ public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
         // 1. 방 생성 (내부에 초대 로직 포함)
         @Transactional
@@ -63,12 +67,31 @@ public class ChatRoomService {
         }
 
     public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
-        PageRequest pageRequest = PageRequest.of(page, size);
+        List<ChatParticipants> sorted = participantsRepository.findAllByUsersIdx(userIdx)
+                .stream()
+                .sorted((a, b) -> {
+                    LocalDateTime timeA = a.getChatRooms().getLastMessageTime();
+                    LocalDateTime timeB = b.getChatRooms().getLastMessageTime();
+                    if (timeA == null) return 1;
+                    if (timeB == null) return -1;
+                    return timeB.compareTo(timeA);
+                })
+                .toList();
+        Map<Long, Long> unreadMap = sorted.stream()
+                .collect(Collectors.toMap(
+                        p -> p.getChatRooms().getIdx(),
+                        p -> chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThan(
+                                p.getChatRooms().getIdx(),
+                                p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L
+                        )
+                ));
 
-        // 1. 내가 참여자로 등록된 데이터들을 가져옵니다.
-        Page<ChatParticipants> result = participantsRepository.findAllByUsersIdx(userIdx, pageRequest);
+        int start = page * size;
+        int end = Math.min(start + size, sorted.size());
+        List<ChatParticipants> paged = sorted.subList(start, end);
+        Page<ChatParticipants> result = new PageImpl<>(paged, PageRequest.of(page, size), sorted.size());
 
-        return ChatRoomsDto.PageRes.from(result);
+        return ChatRoomsDto.PageRes.from(result, unreadMap);
     }
     @Transactional
     public void exit(Long roomIdx, Long userIdx) {
