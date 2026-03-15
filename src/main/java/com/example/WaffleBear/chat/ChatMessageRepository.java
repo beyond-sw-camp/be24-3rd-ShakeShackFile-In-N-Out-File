@@ -6,7 +6,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Optional;
+
 public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long> {
 
     Page<ChatMessages> findAllByChatRooms(ChatRooms room, Pageable pageable);
+    Optional<ChatMessages> findTopByChatRoomsIdxOrderByCreatedAtDesc(Long roomIdx);
+    long countByChatRoomsIdxAndIdxGreaterThan(Long roomIdx, Long lastReadMessageId);
 }
