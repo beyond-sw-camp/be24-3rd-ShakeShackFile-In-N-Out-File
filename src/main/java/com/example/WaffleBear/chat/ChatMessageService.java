@@ -4,6 +4,7 @@ import com.example.WaffleBear.chat.model.dto.ChatMessagesDto;
 import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
+import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class ChatMessageService {
@@ -21,7 +24,7 @@ public class ChatMessageService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
-
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
@@ -41,10 +44,10 @@ public class ChatMessageService {
     }
 
     @Transactional
-    public ChatMessagesDto.ListRes saveMessage(Long roomIdx, ChatMessagesDto.Send req, Long userIdx) {
+    public ChatMessagesDto.ListRes saveMessage(Long roomIdx, ChatMessagesDto.Send req, Long senderIdx) {
         ChatRooms room = chatRoomRepository.findById(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
-        User user = userRepository.findById(userIdx)
+        User user = userRepository.findById(senderIdx)
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다."));
 
         // 메시지 생성 및 저장
@@ -53,6 +56,18 @@ public class ChatMessageService {
         // ChatRooms 정보 업데이트
         room.updateLastMessage(message.getContents(),message.getCreatedAt());
 
+        List<ChatParticipants> participants = participantsRepository.findAllByChatRoomsIdx(roomIdx);
+        for (ChatParticipants participant : participants) {
+            Long userIdx = participant.getUsers().getIdx();
+            System.out.println("알림 대상 userIdx: " + userIdx + ", 발신자: " + senderIdx);
+            if (!userIdx.equals(senderIdx)) {
+                notificationService.sendToUser(
+                        userIdx,
+                        room.getTitle(),  // 알림 제목: 채팅방 이름
+                        user.getName() + ": " + message.getContents() // 알림 내용
+                );
+            }
+        }
         // 전송용 응답 DTO 반환
         return ChatMessagesDto.ListRes.from(message);
     }

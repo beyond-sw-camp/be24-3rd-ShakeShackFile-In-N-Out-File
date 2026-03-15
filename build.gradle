@@ -25,6 +25,10 @@ repositories {
 }
 
 dependencies {
+	// Notification
+	implementation 'nl.martijndwars:web-push:5.1.1'
+	implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+
 	// Websocket
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
