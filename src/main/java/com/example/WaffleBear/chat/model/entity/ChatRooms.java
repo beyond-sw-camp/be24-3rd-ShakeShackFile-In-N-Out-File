@@ -16,12 +16,16 @@ public class ChatRooms {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idx;
     private LocalDateTime createdAt;
+    @Setter
     private String title;
-    @Setter
     private String lastMessage;
-    @Setter
     private LocalDateTime lastMessageTime;
 
     @OneToMany(mappedBy = "chatRooms", fetch = FetchType.LAZY)
     private List<ChatParticipants> participants;
+
+    public void updateLastMessage(String contents, LocalDateTime time) {
+        this.lastMessage = contents;
+        this.lastMessageTime = time;
+    }
 }

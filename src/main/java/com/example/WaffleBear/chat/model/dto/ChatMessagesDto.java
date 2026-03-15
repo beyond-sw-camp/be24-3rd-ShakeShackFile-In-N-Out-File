@@ -23,7 +23,7 @@ public class ChatMessagesDto {
                     .chatRooms(room)
                     .sender(sender)
                     .contents(this.contents)
-                    .sendTime(LocalDateTime.now())
+                    .createdAt(LocalDateTime.now())
                     .build();
         }
     }
@@ -63,7 +63,7 @@ public class ChatMessagesDto {
                     .senderIdx(entity.getSender().getIdx())
                     .senderNickname(entity.getSender().getName()) // User 엔티티에 nickname이 있다고 가정
                     .contents(entity.getContents())
-                    .createdAt(entity.getSendTime())
+                    .createdAt(entity.getCreatedAt())
                     .build();
         }
     }

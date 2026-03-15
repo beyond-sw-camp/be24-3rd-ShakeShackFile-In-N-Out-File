@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
@@ -61,12 +62,14 @@ public class ChatRoomService {
             participantsRepository.saveAll(participants);
         }
 
-    public ChatRoomsDto.PageRes list(int page, int size) {
-        PageRequest pageRequest = PageRequest.of(page, size);
+    public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("lastMessageTime").descending());
 
-        // 페이징 처리 ⭕, 페이지 번호가 필요하다 => Page 반환
-        // 페이징 처리 ⭕, 페이지 번호가 필요없다. => Slice 반환
-        Page<ChatRooms> result = chatRoomRepository.findAll(pageRequest);
+        // 1. 내가 참여자로 등록된 데이터들을 가져옵니다.
+        Page<ChatParticipants> participantsPage = participantsRepository.findAllByUsersIdx(userIdx, pageRequest);
+
+        // 2. ChatParticipants에서 ChatRooms 엔티티만 추출하여 변환합니다.
+        Page<ChatRooms> result = participantsPage.map(ChatParticipants::getChatRooms);
 
         return ChatRoomsDto.PageRes.from(result);
     }
@@ -84,4 +87,11 @@ public class ChatRoomService {
         return participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, userIdx);
     }
 
+    @Transactional // 트랜잭션을 통해 Dirty Checking으로 저장합니다.
+    public void updateRoomTitle(Long roomIdx, String newTitle, Long userIdx) {
+        ChatParticipants participant = participantsRepository.findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
+                .orElseThrow(() -> new IllegalArgumentException("해당 채팅방 참여 정보를 찾을 수 없습니다."));
+
+        participant.setCustomRoomName(newTitle);
+    }
 }

@@ -5,6 +5,7 @@ import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.model.User;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
@@ -69,6 +70,11 @@ public class ChatRoomsDto {
                     .participantCount(entity.getParticipants() != null ? entity.getParticipants().size() : 0)
                     .build();
         }
+    }
+    @Getter
+    @Setter
+    public static class UpdateTitleReq {
+        private String title;
     }
 
 }
