@@ -5,6 +5,7 @@ import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 
@@ -15,6 +16,7 @@ public interface ParticipantsRepository extends JpaRepository<ChatParticipants,L
 
     boolean existsByChatRoomsIdx(Long roomIdx);
 
+    @Query("SELECT cp FROM ChatParticipants cp JOIN cp.chatRooms cr WHERE cp.users.idx = :userIdx ORDER BY cr.lastMessageTime DESC NULLS LAST")
     Page<ChatParticipants> findAllByUsersIdx(Long userIdx, PageRequest pageRequest);
 
     Optional<ChatParticipants> findByChatRoomsIdxAndUsersIdx(Long roomIdx, Long userIdx);
