@@ -63,13 +63,10 @@ public class ChatRoomService {
         }
 
     public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("lastMessageTime").descending());
+        PageRequest pageRequest = PageRequest.of(page, size);
 
         // 1. 내가 참여자로 등록된 데이터들을 가져옵니다.
-        Page<ChatParticipants> participantsPage = participantsRepository.findAllByUsersIdx(userIdx, pageRequest);
-
-        // 2. ChatParticipants에서 ChatRooms 엔티티만 추출하여 변환합니다.
-        Page<ChatRooms> result = participantsPage.map(ChatParticipants::getChatRooms);
+        Page<ChatParticipants> result = participantsRepository.findAllByUsersIdx(userIdx, pageRequest);
 
         return ChatRoomsDto.PageRes.from(result);
     }

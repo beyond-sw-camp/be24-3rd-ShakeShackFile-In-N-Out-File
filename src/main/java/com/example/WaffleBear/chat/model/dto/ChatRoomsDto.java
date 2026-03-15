@@ -14,11 +14,13 @@ import java.util.List;
 public class ChatRoomsDto {
     @Getter
     public static class ChatRoomsReq {
+        private String title;
         private List<Long> participantsIdx;
 
         // Service로부터 이미 조회된 User 리스트를 전달받아 처리
         public ChatRooms toEntity() {
             return ChatRooms.builder()
+                    .title(this.title)
                     .createdAt(LocalDateTime.now())
                     .build();
         }
@@ -38,16 +40,14 @@ public class ChatRoomsDto {
         private List<ListRes> boardList;
         private int totalPage;
         private long totalCount;
-        private int currentPage;
-        private int currentSize;
 
-        public static PageRes from(Page<ChatRooms> result) {
+        public static PageRes from(Page<ChatParticipants> result) {
             return PageRes.builder()
-                    .boardList(result.get().map(ChatRoomsDto.ListRes::from).toList())
+                    .boardList(result.getContent().stream()
+                            .map(ChatRoomsDto.ListRes::from) // 아래에서 수정할 ListRes.from 사용
+                            .toList())
                     .totalPage(result.getTotalPages())
                     .totalCount(result.getTotalElements())
-                    .currentPage(result.getPageable().getPageNumber())
-                    .currentSize(result.getPageable().getPageSize())
                     .build();
         }
     }
@@ -61,13 +61,21 @@ public class ChatRoomsDto {
         private LocalDateTime lastMessageTime;
         private int participantCount;
 
-        public static ListRes from(ChatRooms entity) {
+        // ChatParticipants 엔티티를 전달받아 데이터를 가공합니다.
+        public static ListRes from(ChatParticipants participant) {
+            ChatRooms room = participant.getChatRooms();
+
+            // 1. 개인 설정 이름이 있으면 사용, 없으면 방의 기본 제목 사용
+            String displayName = (participant.getCustomRoomName() != null && !participant.getCustomRoomName().isEmpty())
+                    ? participant.getCustomRoomName()
+                    : room.getTitle();
+
             return ListRes.builder()
-                    .idx(entity.getIdx())
-                    .title(entity.getTitle())
-                    .lastMessage(entity.getLastMessage())
-                    .lastMessageTime(entity.getLastMessageTime())
-                    .participantCount(entity.getParticipants() != null ? entity.getParticipants().size() : 0)
+                    .idx(room.getIdx())
+                    .title(displayName) // 사용자별로 다른 이름이 할당됩니다.
+                    .lastMessage(room.getLastMessage())
+                    .lastMessageTime(room.getLastMessageTime())
+                    .participantCount(room.getParticipants() != null ? room.getParticipants().size() : 0)
                     .build();
         }
     }
