@@ -35,4 +35,6 @@ public class ChatMessages {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+
+
 }
