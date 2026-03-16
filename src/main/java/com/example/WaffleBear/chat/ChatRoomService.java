@@ -65,10 +65,15 @@ public class ChatRoomService {
             List<User> users = userRepository.findAllById(userIdx);
 
             List<ChatParticipants> participants = users.stream()
+                    .filter(user -> !participantsRepository
+                            .existsByChatRoomsIdxAndUsersIdx(room.getIdx(), user.getIdx())) // ← 이미 있으면 제외
                     .map(user -> ChatParticipantsDto.Create.toEntity(room, user))
                     .collect(Collectors.toList());
 
-            participantsRepository.saveAll(participants);
+            if (!participants.isEmpty()) {
+                participantsRepository.saveAll(participants);
+            }
+
         }
 
     public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
