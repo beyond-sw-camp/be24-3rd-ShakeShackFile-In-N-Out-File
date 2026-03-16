@@ -5,6 +5,7 @@ import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.email.EmailVerifyRepository;
 import com.example.WaffleBear.email.EmailVerifyService;
+import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
@@ -17,6 +18,7 @@ import com.example.WaffleBear.workspace.model.relation.UserPostDto;
 import com.example.WaffleBear.workspace.repository.PostRepository;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ public class PostService {
     private final UserRepository ur;
     private final PostRepository pr;
     private final UserPostRepository upr;
+    private final NotificationService ns;
 
     public PostDto.ResPost save(PostDto.ReqPost dto, User user) {
 
@@ -87,6 +90,7 @@ public class PostService {
         }
     }
 
+    @Async
     public Optional<BaseResponse> invite(String uuid, String email, AuthUserDetails user) {
 
         // 게시글 존재 여부
@@ -96,6 +100,16 @@ public class PostService {
         if(!post.getType()) {
             throw new RuntimeException("파일의 권한이 없습니다.");
         }
+        User inviter = ur.findByEmail(email).orElseThrow(
+                () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
+        );
+        ns.sendToUser(
+                inviter.getIdx(),
+                "워크 스페이스 초대",
+                "새로운 워크스페이스에 초대 되었습니다.",
+                null,
+                1L
+        );
 
         // 공유(Shared)일 경우
         if(email != null && post.getStatus() == isShare.Shared) {
@@ -196,7 +210,7 @@ public class PostService {
     }
 
     @Transactional
-    public Optional<BaseResponseStatus> saveRole(Long post_idx, AuthUserDetails Admin, Map<Long,AccessRole> role) {
+    public BaseResponseStatus saveRole(Long post_idx, AuthUserDetails Admin, Map<Long,AccessRole> role) {
 
         // 유저가 해당하는 Post 가 있는지 확인
         UserPost result = upr.findByUser_IdxAndWorkspace_Idx(Admin.getIdx(), post_idx)
@@ -224,7 +238,7 @@ public class PostService {
         });
         System.out.println("조회된 유저 수: " + updateRole.size());
 
-        return Optional.of(SUCCESS);
+        return SUCCESS;
     }
 
     public List<PostDto.ResList> list(Long user_idx) {
