@@ -51,6 +51,7 @@ public class ChatRoomController {
         ChatRoomsDto.PageRes dto = chatRoomService.list(page, size, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success(dto));
     }
+    // 나가기
     @DeleteMapping("/{roomIdx}/exit")
     public ResponseEntity exit(@PathVariable Long roomIdx,
                                @AuthenticationPrincipal AuthUserDetails user){
@@ -67,8 +68,21 @@ public class ChatRoomController {
         chatRoomService.updateRoomTitle(roomIdx, req.getTitle(), user.getIdx());
         return ResponseEntity.ok(BaseResponse.success("방 이름이 변경되었습니다."));
     }
-    public boolean isMember(Long roomId, Long userIdx) {
-        return participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, userIdx);
+    // 채팅방에 볼때
+    @PostMapping("/{roomIdx}/enter")
+    public ResponseEntity enter(
+            @PathVariable Long roomIdx,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        chatRoomService.enterRoom(roomIdx, user.getIdx());
+        return ResponseEntity.ok().build();
     }
 
+    // 채팅방 안보고있는 상태
+    @PostMapping("/{roomIdx}/leave")
+    public ResponseEntity leave(
+            @PathVariable Long roomIdx,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        chatRoomService.leaveRoom(roomIdx, user.getIdx());
+        return ResponseEntity.ok().build();
+    }
 }
