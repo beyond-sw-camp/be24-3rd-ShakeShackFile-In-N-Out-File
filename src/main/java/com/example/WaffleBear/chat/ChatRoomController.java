@@ -85,4 +85,5 @@ public class ChatRoomController {
         chatRoomService.leaveRoom(roomIdx, user.getIdx());
         return ResponseEntity.ok().build();
     }
+    //수정
 }

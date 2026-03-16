@@ -25,6 +25,7 @@ public class ChatMessageService {
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
     private final NotificationService notificationService;
+    private final ChatRoomService chatRoomService;
 
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
@@ -59,13 +60,17 @@ public class ChatMessageService {
         List<ChatParticipants> participants = participantsRepository.findAllByChatRoomsIdx(roomIdx);
         for (ChatParticipants participant : participants) {
             Long userIdx = participant.getUsers().getIdx();
-            System.out.println("알림 대상 userIdx: " + userIdx + ", 발신자: " + senderIdx);
+            boolean isActive = chatRoomService.isActiveInRoom(roomIdx, userIdx);
+            System.out.println("알림 체크 - 방:" + roomIdx + " 유저:" + userIdx + " 접속중:" + isActive + " 발신자:" + senderIdx);
             if (!userIdx.equals(senderIdx)) {
-                notificationService.sendToUser(
-                        userIdx,
-                        room.getTitle(),  // 알림 제목: 채팅방 이름
-                        user.getName() + ": " + message.getContents() // 알림 내용
-                );
+                if (!chatRoomService.isActiveInRoom(roomIdx, userIdx)) { // 접속 중인지 체크
+                    notificationService.sendToUser(
+                            userIdx,
+                            room.getTitle(),
+                            user.getName() + ": " + message.getContents(),
+                            roomIdx
+                    );
+                }
             }
         }
         // 전송용 응답 DTO 반환

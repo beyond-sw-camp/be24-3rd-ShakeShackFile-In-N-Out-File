@@ -34,6 +34,7 @@ public class NotificationDto {
     public static class Payload {
         private String title;
         private String message;
+        private Long roomIdx;
 
         public static Payload from(Send dto) {
             return Payload.builder()
@@ -41,18 +42,24 @@ public class NotificationDto {
                     .message(dto.message)
                     .build();
         }
-        
+
         // 추가: 메시지 직접 생성용
-        public static Payload create(String title, String message) {
+        public static Payload create(String title, String message, Long roomIdx) {
             return Payload.builder()
                     .title(title)
                     .message(message)
+                    .roomIdx(roomIdx)
                     .build();
         }
 
         @Override
         public String toString() {
-            return "{\"title\":\""+this.title+"\", \"message\":\""+this.message+"\"}";
+            return String.format(
+                    "{\"title\":\"%s\", \"message\":\"%s\", \"roomIdx\":%d}",
+                    this.title,
+                    this.message,
+                    this.roomIdx // <-- 이 부분을 추가하세요!
+            );
         }
     }
 }
