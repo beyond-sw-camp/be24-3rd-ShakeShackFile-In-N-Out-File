@@ -74,4 +74,5 @@ public class ChatMessageController {
         chatMessageService.markAsRead(roomIdx, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success("읽음 처리 완료"));
     }
+    // 복구
 }

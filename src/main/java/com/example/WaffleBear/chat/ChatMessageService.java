@@ -81,4 +81,5 @@ public class ChatMessageService {
         chatMessageRepository.findTopByChatRoomsIdxOrderByCreatedAtDesc(roomIdx)
                 .ifPresent(msg -> participant.updateLastReadMessageId(msg.getIdx()));
     }
+    // 복구
 }

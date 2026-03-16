@@ -13,4 +13,5 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
     Page<ChatMessages> findAllByChatRooms(ChatRooms room, Pageable pageable);
     Optional<ChatMessages> findTopByChatRoomsIdxOrderByCreatedAtDesc(Long roomIdx);
     long countByChatRoomsIdxAndIdxGreaterThan(Long roomIdx, Long lastReadMessageId);
+    //복구
 }
