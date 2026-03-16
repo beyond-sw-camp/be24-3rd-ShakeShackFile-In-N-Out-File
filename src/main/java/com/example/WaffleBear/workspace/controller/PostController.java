@@ -126,19 +126,16 @@ public class PostController {
         return ps.loadRole(post_idx, check_user);
     }
     @PostMapping("/saveRole/{idx}")
-    public Optional<BaseResponseStatus> saveRole(
+    public BaseResponseStatus saveRole(
             @AuthenticationPrincipal AuthUserDetails user,
             @PathVariable("idx") Long post_idx,
             @RequestBody Map<Long, AccessRole> role) {
 
-        boolean result = ps.saveRole(post_idx, user, role).isPresent();
-        System.out.println(result);
-
-        if(!result) {
-            return Optional.of(BaseResponseStatus.FAIL);
+        if(ps.saveRole(post_idx, user, role) != BaseResponseStatus.SUCCESS) {
+            return BaseResponseStatus.FAIL;
         }
 
-        return Optional.of(BaseResponseStatus.SUCCESS);
+        return BaseResponseStatus.SUCCESS;
     }
 
     @GetMapping("/list")
