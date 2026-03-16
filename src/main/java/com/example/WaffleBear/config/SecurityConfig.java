@@ -53,7 +53,8 @@ public class SecurityConfig {
 
         // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/ws-stomp/**","/ws-stomp/info", "/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue").permitAll()
+                .requestMatchers("/administrator/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue","/ws-stomp/**", "/notification/subscribe").permitAll()
                 .anyRequest().authenticated()
         );
 
@@ -61,12 +62,19 @@ public class SecurityConfig {
         http.addFilterBefore(loginFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
+    //호
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowCredentials(true);
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "http://192.168.*:*",
+                "http://10.*:*",
+                "http://172.*:*"
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 

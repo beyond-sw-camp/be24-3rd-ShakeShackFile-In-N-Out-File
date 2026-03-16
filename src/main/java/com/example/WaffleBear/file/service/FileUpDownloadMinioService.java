@@ -5,12 +5,12 @@ import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.file.FileUpDownloadRepository;
 import com.example.WaffleBear.file.model.FileInfo;
-import com.example.WaffleBear.file.model.FileInfoDto;
+import com.example.WaffleBear.file.dto.FileCommonDto;
+import com.example.WaffleBear.file.info.dto.FileInfoDto;
+import com.example.WaffleBear.file.manage.dto.FileManageDto;
 import com.example.WaffleBear.file.model.FileNodeType;
-import com.example.WaffleBear.user.model.AuthUserDetails;
+import com.example.WaffleBear.file.share.ShareRepository;
 import com.example.WaffleBear.user.model.User;
-import io.minio.ComposeObjectArgs;
-import io.minio.ComposeSource;
 import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
@@ -21,8 +21,6 @@ import io.minio.Result;
 import io.minio.http.Method;
 import io.minio.messages.DeleteObject;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
@@ -42,6 +40,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -51,85 +51,15 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final VideoThumbnailService videoThumbnailService;
+    private final StoragePlanService storagePlanService;
+    private final ShareRepository shareRepository;
 
-    private static final long MAX_SIZE_BYTES = 5L * 1024 * 1024 * 1024;
-    private static final long PARTITION_SIZE_BYTES = 100L * 1024 * 1024;
-    private static final long CHUNK_SIZE_BYTES = 80L * 1024 * 1024;
-    private static final long MIN_FINAL_PARTITION_SIZE_BYTES = 10L * 1024 * 1024;
-    private static final long BASIC_STORAGE_BYTES = 20L * 1024 * 1024 * 1024;
-    private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
-    private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
     private static final int MAX_TEXT_PREVIEW_BYTES = 64 * 1024;
     private static final String THUMBNAIL_DIRECTORY_NAME = "thumbnails";
+    private final Set<String> thumbnailGenerationInProgress = ConcurrentHashMap.newKeySet();
 
     @Override
-    public List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests) {
-        if (requests == null || requests.isEmpty()) {
-            throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
-        }
-
-        if (requests.size() > 1000) {
-            throw BaseException.from(BaseResponseStatus.FILE_COUNT_WRONG);
-        }
-
-        Long userIdx = resolveUserIdx();
-        List<FileInfoDto.FileRes> result = new ArrayList<>();
-
-        for (FileInfoDto.FileReq req : requests) {
-            validate(req);
-
-            String fileOriginName = req.getFileOriginName().trim();
-            String fileFormat = normalizeFormat(req.getFileFormat(), fileOriginName);
-            String basicPath = userIdx + "/";
-
-            if (shouldPartition(req.getFileSize())) {
-                result.addAll(createPartitionResponses(req, fileOriginName, fileFormat, basicPath));
-            } else {
-                result.add(createSingleResponse(req, fileOriginName, fileFormat, basicPath, userIdx));
-            }
-        }
-
-        return result;
-    }
-
-    @Override
-    public FileInfoDto.CompleteRes completeUpload(FileInfoDto.CompleteReq request) {
-        validateCompleteRequest(request);
-
-        String fileOriginName = request.getFileOriginName().trim();
-        String fileFormat = normalizeFormat(request.getFileFormat(), fileOriginName);
-        String finalObjectKey = request.getFinalObjectKey();
-        List<String> chunkObjectKeys = request.getChunkObjectKeys();
-        String fileSaveName = extractObjectName(finalObjectKey);
-        Long userIdx = resolveUserIdx();
-
-        composeFinalObject(finalObjectKey, chunkObjectKeys);
-        saveFinalFileInfo(
-                fileOriginName,
-                fileFormat,
-                fileSaveName,
-                finalObjectKey,
-                request.getFileSize(),
-                userIdx,
-                request.getParentId()
-        );
-        cleanupPartitionObjects(chunkObjectKeys);
-
-        return FileInfoDto.CompleteRes.builder()
-                .fileOriginName(fileOriginName)
-                .fileSaveName(fileSaveName)
-                .fileFormat(fileFormat)
-                .finalObjectKey(finalObjectKey)
-                .build();
-    }
-
-    @Override
-    public FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto) {
-        return null;
-    }
-
-    @Override
-    public List<FileInfoDto.FileListItemRes> fileList(Long idx) {
+    public List<FileCommonDto.FileListItemRes> fileList(Long idx) {
         Long userIdx = idx == null ? 0L : idx;
 
         return fileUpDownloadRepository.findAllByUser_IdxOrderByLastModifyDateDescUploadDateDesc(userIdx)
@@ -139,12 +69,11 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileListItemRes createFolder(FileInfoDto.FolderReq request) {
+    public FileCommonDto.FileListItemRes createFolder(Long userIdx, FileManageDto.FolderReq request) {
         if (request == null || request.getFolderName() == null || request.getFolderName().isBlank()) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        Long userIdx = resolveUserIdx();
         String folderName = sanitizeFolderName(request.getFolderName());
         FileInfo parent = resolveParentFolder(userIdx, request.getParentId());
 
@@ -167,16 +96,17 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx) {
+    public FileCommonDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx) {
         FileInfo target = getOwnedFile(userIdx, fileIdx);
         List<FileInfo> userFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx);
         List<FileInfo> targetTree = collectTargetTree(target, userFiles);
+        ensureNoLockedNodes(targetTree);
         LocalDateTime deletedAt = LocalDateTime.now();
 
         targetTree.forEach(file -> file.markTrashed(deletedAt));
         fileUpDownloadRepository.saveAll(targetTree);
 
-        return FileInfoDto.FileActionRes.builder()
+        return FileCommonDto.FileActionRes.builder()
                 .targetIdx(fileIdx)
                 .action("trash")
                 .affectedCount(targetTree.size())
@@ -184,15 +114,22 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx) {
+    public FileCommonDto.FileActionRes restoreFromTrash(Long userIdx, Long fileIdx) {
+        return restoreFilesFromTrash(userIdx, List.of(fileIdx));
+    }
+
+    @Override
+    public FileCommonDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx) {
         FileInfo target = getOwnedFile(userIdx, fileIdx);
         List<FileInfo> userFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx);
         List<FileInfo> targetTree = collectTargetTree(target, userFiles);
+        ensureNoLockedNodes(targetTree);
 
         removeMinioObjects(targetTree);
+        deleteFileShares(targetTree);
         fileUpDownloadRepository.deleteAll(sortForDelete(targetTree));
 
-        return FileInfoDto.FileActionRes.builder()
+        return FileCommonDto.FileActionRes.builder()
                 .targetIdx(fileIdx)
                 .action("permanent-delete")
                 .affectedCount(targetTree.size())
@@ -200,24 +137,26 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileActionRes clearTrash(Long userIdx) {
+    public FileCommonDto.FileActionRes clearTrash(Long userIdx) {
         List<FileInfo> trashedFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx)
                 .stream()
                 .filter(FileInfo::isTrashed)
                 .toList();
 
         if (trashedFiles.isEmpty()) {
-            return FileInfoDto.FileActionRes.builder()
+            return FileCommonDto.FileActionRes.builder()
                     .targetIdx(null)
                     .action("clear-trash")
                     .affectedCount(0)
                     .build();
         }
 
+        ensureNoLockedNodes(trashedFiles);
         removeMinioObjects(trashedFiles);
+        deleteFileShares(trashedFiles);
         fileUpDownloadRepository.deleteAll(sortForDelete(trashedFiles));
 
-        return FileInfoDto.FileActionRes.builder()
+        return FileCommonDto.FileActionRes.builder()
                 .targetIdx(null)
                 .action("clear-trash")
                 .affectedCount(trashedFiles.size())
@@ -225,12 +164,12 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId) {
+    public FileCommonDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId) {
         return moveFilesToFolder(userIdx, List.of(fileIdx), targetParentId);
     }
 
     @Override
-    public FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId) {
+    public FileCommonDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId) {
         if (fileIdxList == null || fileIdxList.isEmpty()) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
@@ -269,6 +208,8 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
 
         for (FileInfo source : topLevelSources) {
+            ensureNoLockedNodes(resolveNodeType(source) == FileNodeType.FOLDER ? collectTargetTree(source, userFiles) : List.of(source));
+
             if (source.isTrashed()) {
                 throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
             }
@@ -288,7 +229,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         topLevelSources.forEach(source -> source.changeParent(targetParent));
         fileUpDownloadRepository.saveAll(topLevelSources);
 
-        return FileInfoDto.FileActionRes.builder()
+        return FileCommonDto.FileActionRes.builder()
                 .targetIdx(targetParentId)
                 .action("move")
                 .affectedCount(topLevelSources.size())
@@ -296,7 +237,62 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     @Override
-    public FileInfoDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName) {
+    public FileCommonDto.FileActionRes restoreFilesFromTrash(Long userIdx, List<Long> fileIdxList) {
+        if (fileIdxList == null || fileIdxList.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        List<FileInfo> userFiles = fileUpDownloadRepository.findAllByUser_Idx(userIdx);
+        Map<Long, FileInfo> fileById = userFiles.stream()
+                .filter(file -> file.getIdx() != null)
+                .collect(HashMap::new, (map, file) -> map.put(file.getIdx(), file), HashMap::putAll);
+
+        List<FileInfo> requestedTargets = fileIdxList.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(fileIdx -> resolveOwnedFile(fileById, userIdx, fileIdx))
+                .toList();
+
+        if (requestedTargets.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        List<FileInfo> topLevelTargets = requestedTargets.stream()
+                .filter(target -> target.isTrashed())
+                .filter(target -> !hasTrashedAncestor(target, fileById))
+                .toList();
+
+        if (topLevelTargets.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        List<FileInfo> restoreTargets = new ArrayList<>();
+        Set<Long> restoredIds = new HashSet<>();
+
+        for (FileInfo target : topLevelTargets) {
+            validateRestorableParent(target, fileById);
+            for (FileInfo node : collectTargetTree(target, userFiles)) {
+                if (node.getIdx() != null && restoredIds.add(node.getIdx())) {
+                    if (!node.isTrashed()) {
+                        continue;
+                    }
+                    node.restore();
+                    restoreTargets.add(node);
+                }
+            }
+        }
+
+        fileUpDownloadRepository.saveAll(restoreTargets);
+
+        return FileCommonDto.FileActionRes.builder()
+                .targetIdx(null)
+                .action("restore")
+                .affectedCount(restoreTargets.size())
+                .build();
+    }
+
+    @Override
+    public FileCommonDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName) {
         FileInfo folder = getOwnedFile(userIdx, folderIdx);
         if (folder.isTrashed() || resolveNodeType(folder) != FileNodeType.FOLDER) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
@@ -386,14 +382,15 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .filter(file -> resolveNodeType(file) == FileNodeType.FOLDER && file.isTrashed())
                 .toList();
 
-        StoragePlan storagePlan = resolveStoragePlan(resolveCurrentUserRole());
+        StoragePlanService.StorageQuota storageQuota = storagePlanService.resolveQuota(userIdx);
+        long quotaBytes = storageQuota.totalQuotaBytes();
         long usedBytes = sumFileSizes(allFileNodes);
         long activeUsedBytes = sumFileSizes(activeFileNodes);
         long trashUsedBytes = sumFileSizes(trashFileNodes);
-        int usagePercent = storagePlan.quotaBytes() > 0
-                ? (int) Math.min(100, Math.round((usedBytes * 100.0) / storagePlan.quotaBytes()))
+        int usagePercent = quotaBytes > 0
+                ? (int) Math.min(100, Math.round((usedBytes * 100.0) / quotaBytes))
                 : 0;
-        long remainingBytes = Math.max(0L, storagePlan.quotaBytes() - usedBytes);
+        long remainingBytes = Math.max(0L, quotaBytes - usedBytes);
 
         Map<String, StorageCategoryAccumulator> categories = new HashMap<>();
         initializeStorageCategories(categories);
@@ -425,9 +422,15 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .toList();
 
         return FileInfoDto.StorageSummaryRes.builder()
-                .planCode(storagePlan.code())
-                .planLabel(storagePlan.label())
-                .quotaBytes(storagePlan.quotaBytes())
+                .planCode(storageQuota.planCode())
+                .planLabel(storageQuota.planLabel())
+                .shareEnabled(storageQuota.shareEnabled())
+                .fileLockEnabled(storageQuota.fileLockEnabled())
+                .maxUploadFileBytes(storageQuota.maxUploadFileBytes())
+                .maxUploadCount(storageQuota.maxUploadCount())
+                .quotaBytes(quotaBytes)
+                .baseQuotaBytes(storageQuota.baseQuotaBytes())
+                .addonQuotaBytes(storageQuota.addonQuotaBytes())
                 .usedBytes(usedBytes)
                 .activeUsedBytes(activeUsedBytes)
                 .trashUsedBytes(trashUsedBytes)
@@ -446,7 +449,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     @Override
     public FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx) {
         FileInfo file = getOwnedFile(userIdx, fileIdx);
-        if (resolveNodeType(file) != FileNodeType.FILE) {
+        if (resolveNodeType(file) != FileNodeType.FILE || file.isLockedFile()) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
@@ -496,144 +499,6 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         } catch (Exception e) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
-    }
-
-    private Long resolveUserIdx() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Long userIdx = 0L;
-        if (authentication != null && authentication.getPrincipal() instanceof AuthUserDetails userDetails) {
-            userIdx = userDetails.getIdx();
-        }
-        return userIdx;
-    }
-
-    private boolean shouldPartition(Long fileSize) {
-        return fileSize != null && fileSize > PARTITION_SIZE_BYTES;
-    }
-
-    private List<FileInfoDto.FileRes> createPartitionResponses(
-            FileInfoDto.FileReq req,
-            String fileOriginName,
-            String fileFormat,
-            String basicPath) {
-
-        List<FileInfoDto.FileRes> responses = new ArrayList<>();
-        String finalSaveName = UUID.randomUUID() + "." + fileFormat;
-        String finalObjectKey = basicPath + finalSaveName;
-        String partitionBase = UUID.randomUUID().toString();
-        int partitionCount = calculatePartitionCount(req.getFileSize());
-
-        for (int partitionIndex = 0; partitionIndex < partitionCount; partitionIndex++) {
-            String objectKey = buildPartitionObjectKey(basicPath, partitionBase, fileFormat, partitionIndex, partitionCount);
-            responses.add(FileInfoDto.FileRes.builder()
-                    .fileOriginName(fileOriginName)
-                    .fileSaveName(finalSaveName)
-                    .fileFormat(fileFormat)
-                    .presignedUploadUrl(generatePresignedUploadUrl(objectKey))
-                    .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
-                    .objectKey(objectKey)
-                    .finalObjectKey(finalObjectKey)
-                    .partitionIndex(partitionIndex + 1)
-                    .partitionCount(partitionCount)
-                    .partitioned(true)
-                    .build());
-        }
-
-        return responses;
-    }
-
-    private FileInfoDto.FileRes createSingleResponse(
-            FileInfoDto.FileReq req,
-            String fileOriginName,
-            String fileFormat,
-            String basicPath,
-            Long userIdx) {
-
-        String fileSaveName = UUID.randomUUID() + "." + fileFormat;
-        String objectKey = basicPath + fileSaveName;
-
-        saveFinalFileInfo(
-                fileOriginName,
-                fileFormat,
-                fileSaveName,
-                objectKey,
-                req.getFileSize(),
-                userIdx,
-                req.getParentId()
-        );
-
-        return FileInfoDto.FileRes.builder()
-                .fileOriginName(fileOriginName)
-                .fileSaveName(fileSaveName)
-                .fileFormat(fileFormat)
-                .presignedUploadUrl(generatePresignedUploadUrl(objectKey))
-                .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
-                .objectKey(objectKey)
-                .finalObjectKey(objectKey)
-                .partitionIndex(1)
-                .partitionCount(1)
-                .partitioned(false)
-                .build();
-    }
-
-    private int calculatePartitionCount(Long fileSize) {
-        if (fileSize == null || fileSize <= 0) {
-            return 1;
-        }
-
-        long partitionCount = (fileSize + CHUNK_SIZE_BYTES - 1) / CHUNK_SIZE_BYTES;
-        long remainder = fileSize % CHUNK_SIZE_BYTES;
-
-        if (partitionCount > 1 && remainder > 0 && remainder <= MIN_FINAL_PARTITION_SIZE_BYTES) {
-            return (int) (partitionCount - 1);
-        }
-
-        return (int) partitionCount;
-    }
-
-    private String buildPartitionObjectKey(
-            String basicPath,
-            String partitionBase,
-            String fileFormat,
-            int partitionIndex,
-            int partitionCount) {
-
-        return basicPath
-                + "tmp/"
-                + partitionBase
-                + ".part"
-                + String.format("%05d", partitionIndex + 1)
-                + "of"
-                + String.format("%05d", partitionCount)
-                + "."
-                + fileFormat;
-    }
-
-    private void saveFinalFileInfo(
-            String fileOriginName,
-            String fileFormat,
-            String fileSaveName,
-            String fileSavePath,
-            Long fileSize,
-            Long userIdx,
-            Long parentId) {
-
-        FileInfo entity = FileInfo.builder()
-                .fileOriginName(fileOriginName)
-                .fileFormat(fileFormat)
-                .fileSaveName(fileSaveName)
-                .fileSavePath(fileSavePath)
-                .fileSize(fileSize)
-                .nodeType(FileNodeType.FILE)
-                .parent(resolveParentFolder(userIdx, parentId))
-                .lockedFile(false)
-                .sharedFile(false)
-                .trashed(false)
-                .deletedAt(null)
-                .user(User.builder().idx(userIdx).build())
-                .build();
-
-        fileUpDownloadRepository.save(entity);
     }
 
     private FileInfo resolveParentFolder(Long userIdx, Long parentId) {
@@ -736,6 +601,75 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         return false;
     }
 
+    private boolean hasTrashedAncestor(FileInfo file, Map<Long, FileInfo> fileById) {
+        FileInfo parent = file.getParent();
+        Set<Long> visited = new HashSet<>();
+
+        while (parent != null && parent.getIdx() != null && visited.add(parent.getIdx())) {
+            FileInfo resolved = fileById.getOrDefault(parent.getIdx(), parent);
+            if (resolved.isTrashed()) {
+                return true;
+            }
+            parent = resolved.getParent();
+        }
+
+        return false;
+    }
+
+    private void validateRestorableParent(FileInfo file, Map<Long, FileInfo> fileById) {
+        FileInfo parent = file.getParent();
+        if (parent == null || parent.getIdx() == null) {
+            return;
+        }
+
+        FileInfo resolvedParent = fileById.getOrDefault(parent.getIdx(), parent);
+        if (resolvedParent.isTrashed() || resolveNodeType(resolvedParent) != FileNodeType.FOLDER) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+    }
+
+    @Override
+    public FileCommonDto.FileActionRes setLockedFiles(Long userIdx, List<Long> fileIdxList, boolean locked) {
+        if (fileIdxList == null || fileIdxList.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        StoragePlanService.StorageQuota storageQuota = storagePlanService.resolveQuota(userIdx);
+        if (locked && !storageQuota.fileLockEnabled()) {
+            throw BaseException.from(BaseResponseStatus.PLAN_FEATURE_NOT_AVAILABLE);
+        }
+
+        List<FileInfo> files = fileIdxList.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(fileIdx -> getOwnedFile(userIdx, fileIdx))
+                .toList();
+
+        for (FileInfo file : files) {
+            if (resolveNodeType(file) != FileNodeType.FILE || file.isTrashed()) {
+                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+            }
+            file.changeLockedFile(locked);
+        }
+
+        fileUpDownloadRepository.saveAll(files);
+
+        return FileCommonDto.FileActionRes.builder()
+                .targetIdx(null)
+                .action(locked ? "lock" : "unlock")
+                .affectedCount(files.size())
+                .build();
+    }
+
+    private void ensureNoLockedNodes(List<FileInfo> files) {
+        boolean hasLockedFile = files.stream()
+                .anyMatch(file -> resolveNodeType(file) == FileNodeType.FILE && file.isLockedFile());
+
+        if (hasLockedFile) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+    }
+
     private void removeMinioObjects(List<FileInfo> files) {
         List<DeleteObject> deleteTargets = files.stream()
                 .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
@@ -764,32 +698,43 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 
-    private void composeFinalObject(String finalObjectKey, List<String> chunkObjectKeys) {
-        try {
-            List<ComposeSource> sources = chunkObjectKeys.stream()
-                    .map(objectKey -> ComposeSource.builder()
-                            .bucket(minioProperties.getBucket_cloud())
-                            .object(objectKey)
-                            .build())
-                    .toList();
+    private void deleteFileShares(List<FileInfo> files) {
+        List<Long> fileIds = files.stream()
+                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
+                .map(FileInfo::getIdx)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
 
-            minioClient.composeObject(
-                    ComposeObjectArgs.builder()
-                            .bucket(minioProperties.getBucket_cloud())
-                            .object(finalObjectKey)
-                            .sources(sources)
-                            .build()
-            );
-        } catch (Exception e) {
-            throw BaseException.from(BaseResponseStatus.FILE_UPLOADURL_FAIL);
+        if (fileIds.isEmpty()) {
+            return;
         }
+
+        List<com.example.WaffleBear.file.share.model.FileShare> shares = shareRepository.findAllByFile_IdxIn(fileIds);
+        if (shares.isEmpty()) {
+            return;
+        }
+
+        shareRepository.deleteAll(shares);
     }
 
-    private void cleanupPartitionObjects(List<String> chunkObjectKeys) {
+    private void deleteObjectKeys(List<String> objectKeys) {
+        if (objectKeys == null || objectKeys.isEmpty()) {
+            return;
+        }
+
         try {
-            List<DeleteObject> objects = chunkObjectKeys.stream()
+            List<DeleteObject> objects = objectKeys.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(key -> !key.isBlank())
+                    .distinct()
                     .map(DeleteObject::new)
                     .toList();
+
+            if (objects.isEmpty()) {
+                return;
+            }
 
             Iterable<Result<io.minio.messages.DeleteError>> results = minioClient.removeObjects(
                     RemoveObjectsArgs.builder()
@@ -805,21 +750,8 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 
-    private String generatePresignedUploadUrl(String objectKey) {
-        try {
-            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
-                    .method(Method.PUT)
-                    .bucket(minioProperties.getBucket_cloud())
-                    .object(objectKey)
-                    .expiry(minioProperties.getPresignedUrlExpirySeconds())
-                    .build());
-        } catch (Exception e) {
-            throw BaseException.from(BaseResponseStatus.FILE_UPLOADURL_FAIL);
-        }
-    }
-
     private String generatePresignedDownloadUrl(FileInfo entity) {
-        if (resolveNodeType(entity) != FileNodeType.FILE) {
+        if (resolveNodeType(entity) != FileNodeType.FILE || entity.isLockedFile()) {
             return null;
         }
 
@@ -841,7 +773,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
     }
 
     private String generatePresignedThumbnailUrl(FileInfo entity) {
-        if (resolveNodeType(entity) != FileNodeType.FILE || !isVideoFile(entity.getFileFormat())) {
+        if (resolveNodeType(entity) != FileNodeType.FILE || entity.isLockedFile() || !isVideoFile(entity.getFileFormat())) {
             return null;
         }
 
@@ -853,10 +785,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         String thumbnailObjectKey = buildThumbnailObjectKey(objectKey);
         try {
             if (!objectExists(thumbnailObjectKey)) {
-                ensureVideoThumbnail(entity, thumbnailObjectKey);
-            }
-
-            if (!objectExists(thumbnailObjectKey)) {
+                triggerThumbnailGeneration(entity, thumbnailObjectKey);
                 return null;
             }
 
@@ -864,6 +793,30 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private void triggerThumbnailGeneration(FileInfo entity, String thumbnailObjectKey) {
+        if (thumbnailObjectKey == null || thumbnailObjectKey.isBlank()) {
+            return;
+        }
+
+        if (!videoThumbnailService.supports(entity.getFileFormat())) {
+            return;
+        }
+
+        if (!thumbnailGenerationInProgress.add(thumbnailObjectKey)) {
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (!objectExists(thumbnailObjectKey)) {
+                    ensureVideoThumbnail(entity, thumbnailObjectKey);
+                }
+            } finally {
+                thumbnailGenerationInProgress.remove(thumbnailObjectKey);
+            }
+        });
     }
 
     private void ensureVideoThumbnail(FileInfo entity, String thumbnailObjectKey) {
@@ -1003,60 +956,10 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         return normalized;
     }
 
-    private void validate(FileInfoDto.FileReq req) {
-        if (req == null) {
-            throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
-        }
-
-        String originName = req.getFileOriginName();
-        if (originName == null || originName.isBlank()) {
-            throw BaseException.from(BaseResponseStatus.FILE_NAME_WRONG);
-        }
-
-        if (originName.length() > 100) {
-            throw BaseException.from(BaseResponseStatus.FILE_NAME_LENGTH_WRONG);
-        }
-
-        if (originName.contains("..") || originName.contains("/") || originName.contains("\\") || originName.contains("\u0000")) {
-            throw BaseException.from(BaseResponseStatus.FILE_NAME_WRONG);
-        }
-
-        Long fileSize = req.getFileSize();
-        if (fileSize != null && fileSize > MAX_SIZE_BYTES) {
-            throw BaseException.from(BaseResponseStatus.FILE_SIZE_WRONG);
-        }
-    }
-
-    private void validateCompleteRequest(FileInfoDto.CompleteReq request) {
-        if (request == null) {
-            throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
-        }
-
-        if (request.getFileOriginName() == null || request.getFileOriginName().isBlank()) {
-            throw BaseException.from(BaseResponseStatus.FILE_NAME_WRONG);
-        }
-
-        if (request.getFinalObjectKey() == null || request.getFinalObjectKey().isBlank()) {
-            throw BaseException.from(BaseResponseStatus.FILE_UPLOADURL_FAIL);
-        }
-
-        if (request.getChunkObjectKeys() == null || request.getChunkObjectKeys().isEmpty()) {
-            throw BaseException.from(BaseResponseStatus.FILE_UPLOADURL_FAIL);
-        }
-    }
-
-    private String extractObjectName(String objectKey) {
-        int idx = objectKey.lastIndexOf('/');
-        if (idx < 0 || idx == objectKey.length() - 1) {
-            return objectKey;
-        }
-        return objectKey.substring(idx + 1);
-    }
-
-    private FileInfoDto.FileListItemRes toFileListItem(FileInfo entity) {
+    private FileCommonDto.FileListItemRes toFileListItem(FileInfo entity) {
         FileNodeType nodeType = resolveNodeType(entity);
 
-        return FileInfoDto.FileListItemRes.builder()
+        return FileCommonDto.FileListItemRes.builder()
                 .idx(entity.getIdx())
                 .fileOriginName(entity.getFileOriginName())
                 .fileSaveName(entity.getFileSaveName())
@@ -1076,30 +979,6 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
                 .build();
     }
-
-    private String resolveCurrentUserRole() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof AuthUserDetails userDetails) {
-            return userDetails.getRole();
-        }
-
-        return "ROLE_USER";
-    }
-
-    private StoragePlan resolveStoragePlan(String role) {
-        String normalizedRole = role == null ? "" : role.toUpperCase(Locale.ROOT);
-
-        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE") || normalizedRole.contains("ADMIN")) {
-            return new StoragePlan("PREMIUM", "프리미엄", PREMIUM_STORAGE_BYTES);
-        }
-
-        if (normalizedRole.contains("PREMIUM") || normalizedRole.contains("PRO") || normalizedRole.contains("PLUS")) {
-            return new StoragePlan("PLUS", "플러스", PLUS_STORAGE_BYTES);
-        }
-
-        return new StoragePlan("BASIC", "기본", BASIC_STORAGE_BYTES);
-    }
-
     private long sumFileSizes(List<FileInfo> fileNodes) {
         return fileNodes.stream()
                 .mapToLong(this::safeFileSize)
@@ -1120,7 +999,6 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         categories.put("audio", new StorageCategoryAccumulator("오디오"));
         categories.put("other", new StorageCategoryAccumulator("기타"));
     }
-
     private String categorizeExtension(String fileFormat) {
         String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
 
@@ -1217,9 +1095,6 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         return entity.getNodeType() == null ? FileNodeType.FILE : entity.getNodeType();
     }
 
-    private record StoragePlan(String code, String label, long quotaBytes) {
-    }
-
     private static class StorageCategoryAccumulator {
         private final String label;
         private int count;
@@ -1230,3 +1105,4 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 }
+

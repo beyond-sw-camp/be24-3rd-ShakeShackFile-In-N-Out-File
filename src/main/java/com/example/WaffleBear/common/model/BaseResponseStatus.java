@@ -6,38 +6,33 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum BaseResponseStatus {
-    // 2000번대 성공
-    SUCCESS(true, 2000, "요청이 성공했습니다"),
+    SUCCESS(true, 2000, "\uC694\uCCAD\uC774 \uC131\uACF5\uD588\uC2B5\uB2C8\uB2E4."),
 
-    // 3000번대 클라이언트 입력 오류, 입력값 검증 오류
-    JWT_EXPIRED(false, 3001, "JWT 토큰이 만료되었습니다."),
-    JWT_INVALID(false, 3002, "JWT 토큰이 유효하지 않습니다."),
-    SIGNUP_DUPLICATE_EMAIL(false, 3003, "중복된 이메일입니다."),
-    SIGNUP_DUPLICATE_NAME(false, 3004, "중복된 아이디 입니다."),
-    SIGNUP_INVALID_PASSWORD(false, 3005, "비밀번호는 대,소문자, 숫자, 특수문자가 포함되어야 합니다."),
-    SIGNUP_INVALID_UUID(false, 3006, "유효하지 않은 인증값입니다. 이메일 인증을 다시 시도해주세요."),
-    LOGIN_INVALID_USERINFO(false, 3007, "이메일이나 비밀번호를 확인해주세요."),
+    JWT_EXPIRED(false, 3001, "JWT \uD1A0\uD070\uC774 \uB9CC\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."),
+    JWT_INVALID(false, 3002, "JWT \uD1A0\uD070\uC774 \uC720\uD6A8\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
+    SIGNUP_DUPLICATE_EMAIL(false, 3003, "\uC911\uBCF5\uB41C \uC774\uBA54\uC77C\uC785\uB2C8\uB2E4."),
+    SIGNUP_DUPLICATE_NAME(false, 3004, "\uC911\uBCF5\uB41C \uC774\uB984\uC785\uB2C8\uB2E4."),
+    SIGNUP_INVALID_PASSWORD(false, 3005, "\uBE44\uBC00\uBC88\uD638\uB294 \uC601\uBB38, \uC22B\uC790, \uD2B9\uC218\uBB38\uC790\uB97C \uD3EC\uD568\uD574\uC57C \uD569\uB2C8\uB2E4."),
+    SIGNUP_INVALID_UUID(false, 3006, "\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC778\uC99D\uAC12\uC785\uB2C8\uB2E4. \uC774\uBA54\uC77C \uC778\uC99D\uC744 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."),
+    LOGIN_INVALID_USERINFO(false, 3007, "\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694."),
 
-    FILE_NAME_WRONG(false, 3501, "파일의 이름이 정상적이지 않습니다. 수정하셔야 업로드가 가능합니다."),
-    FILE_FORMAT_WRONG(false, 3502, "파일의 형식이 지원하지 않는 형식입니다. 해당 형식은 지원하지 않습니다."),
-    FILE_SIZE_WRONG(false, 3503, "파일의 크기가 지원하는 범위를 벗어났습니다. 해당 크기는 지원하지 않습니다. (MAX SIZE : 5GB)"),
-    FILE_COUNT_WRONG(false, 3504, "파일의 업로드 개수가 지원하는 범위를 벗어났습니다. 정해진 개수 이하로 업로드 하십시오."),
-    FILE_UPLOAD_TIMEOUT(false, 3505, "파일 업로드의 최대 시간이 만료되었습니다. 다시 시도하십시오."),
-    FILE_DOWNLOAD_TIMEOUT(false, 3506, "파일 다운로드의 최대 시간이 만료되었습니다. 다시 시도하십시오."),
-    FILE_UPDATE_TIMEOUT(false, 3507, "파일 조회에 실패하였습니다. 다시 시도하십시오."),
-    FILE_EMPTY(false, 3508, "요청한 파일이 없습니다. 파일을 선택해서 다시 시도하십시오."),
-    FILE_NAME_LENGTH_WRONG(false, 3509, "요청한 파일의 이름이 비정상적으로 깁니다. 수정해서 업로드 하십시오."),
-    FILE_FORMAT_NOTHING(false, 3510, "요청한 파일의 확장자가 존재하지 않습니다. 파일을 확인해 주십시오."),
-    FILE_UPLOADURL_FAIL(false, 3511, "업로드 URL 발급에 실패했습니다."),
+    FILE_NAME_WRONG(false, 3501, "\uD30C\uC77C \uC774\uB984\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
+    FILE_FORMAT_WRONG(false, 3502, "\uC9C0\uC6D0\uD558\uC9C0 \uC54A\uB294 \uD30C\uC77C \uD615\uC2DD\uC785\uB2C8\uB2E4."),
+    FILE_SIZE_WRONG(false, 3503, "\uD604\uC7AC \uBA64\uBC84\uC2ED\uC758 \uD30C\uC77C \uC5C5\uB85C\uB4DC \uD06C\uAE30 \uC81C\uD55C\uC744 \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4."),
+    FILE_COUNT_WRONG(false, 3504, "\uD55C \uBC88\uC5D0 \uC5C5\uB85C\uB4DC\uD560 \uC218 \uC788\uB294 \uD30C\uC77C \uAC1C\uC218\uB97C \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4."),
+    FILE_UPLOAD_TIMEOUT(false, 3505, "\uD30C\uC77C \uC5C5\uB85C\uB4DC \uC2DC\uAC04\uC774 \uCD08\uACFC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."),
+    FILE_DOWNLOAD_TIMEOUT(false, 3506, "\uD30C\uC77C \uB2E4\uC6B4\uB85C\uB4DC \uC2DC\uAC04\uC774 \uCD08\uACFC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."),
+    FILE_UPDATE_TIMEOUT(false, 3507, "\uD30C\uC77C \uC870\uD68C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."),
+    FILE_EMPTY(false, 3508, "\uC694\uCCAD\uD55C \uD30C\uC77C \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."),
+    FILE_NAME_LENGTH_WRONG(false, 3509, "\uD30C\uC77C \uC774\uB984 \uAE38\uC774\uAC00 \uD5C8\uC6A9 \uBC94\uC704\uB97C \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4."),
+    FILE_FORMAT_NOTHING(false, 3510, "\uD30C\uC77C \uD655\uC7A5\uC790\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."),
+    FILE_UPLOADURL_FAIL(false, 3511, "\uC5C5\uB85C\uB4DC URL \uCC98\uB9AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."),
+    STORAGE_QUOTA_EXCEEDED(false, 3512, "\uC800\uC7A5 \uACF5\uAC04\uC774 \uBD80\uC871\uD569\uB2C8\uB2E4. \uC6A9\uB7C9\uC744 \uC815\uB9AC\uD558\uAC70\uB098 \uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9\uC744 \uAD6C\uB9E4\uD574 \uC8FC\uC138\uC694."),
+    PLAN_FEATURE_NOT_AVAILABLE(false, 3513, "\uD604\uC7AC \uBA64\uBC84\uC2ED\uC5D0\uC11C \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uB294 \uAE30\uB2A5\uC785\uB2C8\uB2E4."),
 
-    // 4000번대
-    REQUEST_ERROR(false, 4001, "입력값이 잘못되었습니다."),
-
-    // 5000번대 실패
-    FAIL(false, 5000, "요청이 실패했습니다"),
-
-    // 6000번대 실패
-    INVALID_EMAIL_FORMAT(false, 6001, "이메일형식이 잘못되었습니다.");
+    REQUEST_ERROR(false, 4001, "\uC785\uB825\uAC12\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
+    FAIL(false, 5000, "\uC694\uCCAD \uCC98\uB9AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."),
+    INVALID_EMAIL_FORMAT(false, 6001, "\uC774\uBA54\uC77C \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
 
     private final boolean success;
     private final int code;
