@@ -39,7 +39,7 @@ public class ChatMessagesDto {
 
         public static PageRes from(Page<ChatMessages> result) {
             return PageRes.builder()
-                    .messageList(result.get().map(ChatMessagesDto.ListRes::from).toList())
+                    .messageList(result.get().map(ListRes::from).toList())
                     .totalPage(result.getTotalPages())
                     .totalCount(result.getTotalElements())
                     .currentPage(result.getPageable().getPageNumber())

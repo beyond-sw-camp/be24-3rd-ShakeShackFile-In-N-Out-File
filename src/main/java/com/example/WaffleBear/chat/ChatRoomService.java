@@ -138,4 +138,5 @@ public class ChatRoomService {
         return users != null && users.contains(userIdx);
 
     }
+    //수정
 }

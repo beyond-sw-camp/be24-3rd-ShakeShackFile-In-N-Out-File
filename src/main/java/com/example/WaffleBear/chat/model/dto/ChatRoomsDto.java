@@ -48,7 +48,7 @@ public class ChatRoomsDto {
                     .boardList(result.getContent().stream()
                             .map(p -> {
                                 long unread = unreadMap.getOrDefault(p.getChatRooms().getIdx(), 0L);
-                                return ChatRoomsDto.ListRes.from(p, unread);
+                                return ListRes.from(p, unread);
                             })
                             .toList())
                     .totalPage(result.getTotalPages())
