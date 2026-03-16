@@ -15,36 +15,34 @@ import java.util.Map;
 public class AuthUserDetails implements UserDetails, OAuth2User {
     @Getter
     private Long idx;
+
+    @Getter
+    private String id;
+
     @Getter
     private String email;
+
     private String password;
     private Boolean enable;
+
     @Getter
     private String role;
+
     private String name;
     private Map<String, Object> attributes;
+    private UserAccountStatus accountStatus;
 
     public static AuthUserDetails from(User entity) {
         return AuthUserDetails.builder()
                 .idx(entity.getIdx())
+                .id(entity.getEmail())
                 .email(entity.getEmail())
                 .name(entity.getName())
                 .password(entity.getPassword())
                 .enable(entity.getEnable())
                 .role(entity.getRole())
+                .accountStatus(entity.getAccountStatus() == null ? UserAccountStatus.ACTIVE : entity.getAccountStatus())
                 .build();
-    }
-
-    public Long getIdx() {
-        return idx;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getRole() {
-        return role;
     }
 
     @Override
@@ -79,7 +77,7 @@ public class AuthUserDetails implements UserDetails, OAuth2User {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return accountStatus == null || accountStatus == UserAccountStatus.ACTIVE;
     }
 
     @Override
@@ -89,8 +87,6 @@ public class AuthUserDetails implements UserDetails, OAuth2User {
 
     @Override
     public boolean isEnabled() {
-        return enable;
+        return Boolean.TRUE.equals(enable) && (accountStatus == null || accountStatus == UserAccountStatus.ACTIVE);
     }
-
-
 }

@@ -23,7 +23,7 @@ public class ChatMessagesDto {
                     .chatRooms(room)
                     .sender(sender)
                     .contents(this.contents)
-                    .sendTime(LocalDateTime.now())
+                    .createdAt(LocalDateTime.now())
                     .build();
         }
     }
@@ -39,7 +39,7 @@ public class ChatMessagesDto {
 
         public static PageRes from(Page<ChatMessages> result) {
             return PageRes.builder()
-                    .messageList(result.get().map(ChatMessagesDto.ListRes::from).toList())
+                    .messageList(result.get().map(ListRes::from).toList())
                     .totalPage(result.getTotalPages())
                     .totalCount(result.getTotalElements())
                     .currentPage(result.getPageable().getPageNumber())
@@ -56,15 +56,21 @@ public class ChatMessagesDto {
         private String senderNickname;
         private String contents;
         private LocalDateTime createdAt;
+        private int messageUnreadCount;
 
-        public static ListRes from(ChatMessages entity) {
+        public static ListRes from(ChatMessages entity, int messageUnreadCount) {
             return ListRes.builder()
                     .idx(entity.getIdx())
                     .senderIdx(entity.getSender().getIdx())
                     .senderNickname(entity.getSender().getName()) // User 엔티티에 nickname이 있다고 가정
                     .contents(entity.getContents())
-                    .createdAt(entity.getSendTime())
+                    .createdAt(entity.getCreatedAt())
+                    .messageUnreadCount(messageUnreadCount)
                     .build();
+        }
+        // 기존 from() 오버로딩 (readCount 없는 버전)
+        public static ListRes from(ChatMessages entity) {
+            return from(entity, 0);
         }
     }
 }

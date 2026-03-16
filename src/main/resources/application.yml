@@ -1,3 +1,5 @@
+portone:
+  portone_secret: ${PORTONE_SECRET:}
 
 jwt:
   key: ${JWT_KEY}
@@ -5,6 +7,13 @@ jwt:
 project:
   aes:
     key: aessecretkey01234567891011121314
+
+admin:
+  email: ${ADMIN_EMAIL}
+  name: ${ADMIN_NAME}
+  role: ${ADMIN_ROLE}
+  password: ${ADMIN_PASSWORD}
+
 spring:
   security:
     oauth2:

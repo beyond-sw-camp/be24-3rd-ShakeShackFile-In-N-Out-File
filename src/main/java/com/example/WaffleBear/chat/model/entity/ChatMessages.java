@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 
 import java.time.LocalDateTime;
 
@@ -30,6 +31,10 @@ public class ChatMessages {
     private User sender;
 
     private String contents;
-    private LocalDateTime sendTime;
+    @CreatedDate // 👈 생성 시 시간 자동 기록
+    @Column(updatable = false)
+    private LocalDateTime createdAt;
+
+
 
 }

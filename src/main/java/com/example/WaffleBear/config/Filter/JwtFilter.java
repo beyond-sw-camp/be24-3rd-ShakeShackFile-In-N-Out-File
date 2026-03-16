@@ -1,6 +1,9 @@
 package com.example.WaffleBear.config.Filter;
 
 import com.example.WaffleBear.user.model.AuthUserDetails;
+import com.example.WaffleBear.user.model.User;
+import com.example.WaffleBear.user.model.UserAccountStatus;
+import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.utils.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
@@ -23,21 +26,22 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+    protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        // 로그인, 회원가입, 재발급 등 토큰 검증이 필요 없는 경로는 필터를 건너뜀
-        return path.startsWith("/login") ||
-                path.startsWith("/auth/reissue") ||
-                path.startsWith("/user/signup") ||
-                path.startsWith("/user/verify") ||
-                path.startsWith("/oauth2") ||
-                path.startsWith("/login/oauth2");
+        return path.startsWith("/login")
+                || path.startsWith("/auth/reissue")
+                || path.startsWith("/user/signup")
+                || path.startsWith("/user/verify")
+                || path.startsWith("/oauth2")
+                || path.startsWith("/login/oauth2");
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
 
         // 1. 헤더에서 Authorization 키를 찾음
         String authorization = request.getHeader("Authorization");
@@ -50,20 +54,13 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         // 3. "Bearer " 부분을 제거하고 순수 토큰 문자열만 추출
-        String token = authorization.substring(7).trim();
+        String token = authorization.split(" ")[1];
 
-        // ★ 이 로그가 핵심입니다. 서버 콘솔(Log)에 뭐라고 찍히는지 확인해 보세요!
-        System.out.println("DEBUG: 추출된 순수 토큰 -> [" + token + "]");
-
-        // 4. 토큰 검증
+        // 4. 토큰 소멸 시간 검증
         try {
             jwtUtil.isExpired(token);
         } catch (ExpiredJwtException e) {
-            // 프론트엔드가 토큰 만료를 인지하고 재발급 API를 호출할 수 있도록 401 응답
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            PrintWriter writer = response.getWriter();
-            writer.print("{\"error\": \"access token expired\"}");
+            writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "access token expired");
             return;
         } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -75,23 +72,33 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 5. 토큰 카테고리 검증 (access 토큰이 맞는지)
         String category = jwtUtil.getCategory(token);
-        if (!category.equals("access")) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json;charset=UTF-8");
-            PrintWriter writer = response.getWriter();
-            writer.print("{\"error\": \"invalid token category\"}");
+        if (!"access".equals(category)) {
+            writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "invalid token category");
             return;
         }
 
-        // 6. 정상 토큰이면 값 추출 후 SecurityContextHolder에 인증 정보 저장
         Long idx = jwtUtil.getUserIdx(token);
+        User userEntity = userRepository.findById(idx).orElse(null);
+        if (userEntity == null || !Boolean.TRUE.equals(userEntity.getEnable()) || resolveStatus(userEntity) != UserAccountStatus.ACTIVE) {
+            writeError(response, HttpServletResponse.SC_FORBIDDEN, "user access blocked");
+            return;
+        }
+
         String email = jwtUtil.getEmail(token);
         String role = jwtUtil.getRole(token);
+        String id = jwtUtil.getId(token);
+        if (id == null || id.isBlank()) {
+            id = email;
+        }
 
         AuthUserDetails user = AuthUserDetails.builder()
                 .idx(idx)
+                .id(id)
                 .email(email)
                 .role(role)
+                .name(userEntity.getName())
+                .enable(userEntity.getEnable())
+                .accountStatus(resolveStatus(userEntity))
                 .build();
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -103,5 +110,16 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 다음 필터로 요청 전달
         filterChain.doFilter(request, response);
+    }
+
+    private UserAccountStatus resolveStatus(User user) {
+        return user.getAccountStatus() == null ? UserAccountStatus.ACTIVE : user.getAccountStatus();
+    }
+
+    private void writeError(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json;charset=UTF-8");
+        PrintWriter writer = response.getWriter();
+        writer.print("{\"error\": \"" + message + "\"}");
     }
 }

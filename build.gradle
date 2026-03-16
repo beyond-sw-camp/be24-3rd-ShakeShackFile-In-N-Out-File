@@ -25,6 +25,10 @@ repositories {
 }
 
 dependencies {
+	// Notification
+	implementation 'nl.martijndwars:web-push:5.1.1'
+	implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+
 	// Websocket
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
@@ -66,6 +70,8 @@ dependencies {
 	// Video thumbnail
 	implementation 'org.jcodec:jcodec:0.2.5'
 	implementation 'org.jcodec:jcodec-javase:0.2.5'
+
+	implementation 'io.portone:server-sdk:0.23.0'
 }
 
 tasks.named('test') {

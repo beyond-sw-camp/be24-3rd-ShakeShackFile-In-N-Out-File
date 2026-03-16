@@ -88,4 +88,12 @@ public class FileInfo {
     public void rename(String fileOriginName) {
         this.fileOriginName = fileOriginName;
     }
+
+    public void changeLockedFile(boolean lockedFile) {
+        this.lockedFile = lockedFile;
+    }
+
+    public void changeSharedFile(boolean sharedFile) {
+        this.sharedFile = sharedFile;
+    }
 }

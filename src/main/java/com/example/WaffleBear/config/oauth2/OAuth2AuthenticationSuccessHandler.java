@@ -27,7 +27,13 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         AuthUserDetails user = (AuthUserDetails) authentication.getPrincipal();
 
         // 1. 토큰 발급 및 Refresh Token DB 저장 (로컬 로그인과 동일한 규격)
-        TokenDto.AuthTokenResponse tokens = authService.issueTokens(user.getIdx(), user.getEmail(), user.getName(), user.getRole());
+        TokenDto.AuthTokenResponse tokens = authService.issueTokens(
+                user.getIdx(),
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                user.getRole()
+        );
 
         // 2. Refresh Token은 HttpOnly 쿠키로 설정
         Cookie refreshCookie = new Cookie("refresh", tokens.refreshToken());
