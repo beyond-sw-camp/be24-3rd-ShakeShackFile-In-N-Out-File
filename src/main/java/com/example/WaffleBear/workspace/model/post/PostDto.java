@@ -35,12 +35,14 @@ public class PostDto {
         private Long idx;
         private String title;
         private String contents;
+        private boolean type;
 
         public static ResPost from(Post entity) {
             return ResPost.builder()
                     .idx(entity.getIdx())
                     .title(entity.getTitle())
                     .contents(entity.getContents())
+                    .type(entity.getType())
                     .build();
         }
     }

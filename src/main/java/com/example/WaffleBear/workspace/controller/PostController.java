@@ -2,6 +2,8 @@ package com.example.WaffleBear.workspace.controller;
 
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.user.model.User;
+import com.example.WaffleBear.workspace.model.relation.AccessRole;
+import com.example.WaffleBear.workspace.model.relation.UserPost;
 import com.example.WaffleBear.workspace.model.relation.UserPostDto;
 import com.example.WaffleBear.workspace.service.PostService;
 import com.example.WaffleBear.workspace.model.post.PostDto;
@@ -9,11 +11,13 @@ import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import lombok.RequiredArgsConstructor;
+import org.apache.tomcat.util.json.JSONParser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RequestMapping("/workspace")
@@ -32,9 +36,6 @@ public class PostController {
         User writer = ur.findByEmail(email).orElseThrow(
                 () -> new RuntimeException("사용자를 찾을수 없습니다.")
         );
-        System.out.println(dto.getIdx());
-        System.out.println(dto.getTitle());
-        System.out.println(dto.getContents());
 
         PostDto.ResPost result =  ps.save(dto, writer);
 
@@ -116,13 +117,28 @@ public class PostController {
         ps.isShared(post_idx, check_user, dto);
     }
     @GetMapping("/loadRole/{idx}")
-    public List<UserPostDto.ReqRole> loadRole(
+    public List<UserPostDto.ResRole> loadRole(
             @AuthenticationPrincipal AuthUserDetails user,
             @PathVariable("idx") Long post_idx) {
 
         Long check_user = user.getIdx();
 
         return ps.loadRole(post_idx, check_user);
+    }
+    @PostMapping("/saveRole/{idx}")
+    public Optional<BaseResponseStatus> saveRole(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable("idx") Long post_idx,
+            @RequestBody Map<Long, AccessRole> role) {
+
+        boolean result = ps.saveRole(post_idx, user, role).isPresent();
+        System.out.println(result);
+
+        if(!result) {
+            return Optional.of(BaseResponseStatus.FAIL);
+        }
+
+        return Optional.of(BaseResponseStatus.SUCCESS);
     }
 
     @GetMapping("/list")
