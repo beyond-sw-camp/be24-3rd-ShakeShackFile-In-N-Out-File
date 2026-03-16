@@ -21,27 +21,21 @@ public class UserPostDto {
                     .build();
         }
     }
-
     @Getter
     @Builder
-    public static class ReqRole {
+    public static class ResRole {
+        private Long idx;
         private String username;
         private String Image;
         private AccessRole role;
 
         // Image 불러오는 로직 필요함.
-        public static ReqRole from(UserPost entity) {
-            return ReqRole.builder()
+        public static ResRole from(UserPost entity) {
+            return ResRole.builder()
+                    .idx(entity.getUser().getIdx())
                     .username(entity.getUser().getName())
                     .role(entity.getLevel())
                     .build();
         }
-    }
-
-    @Getter
-    @Builder
-    public static class ResRole {
-        private User user;
-        private AccessRole role;
     }
 }

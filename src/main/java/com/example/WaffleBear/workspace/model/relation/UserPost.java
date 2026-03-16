@@ -4,10 +4,7 @@ package com.example.WaffleBear.workspace.model.relation;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.model.post.Post;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -28,6 +25,12 @@ public class UserPost {
     @JoinColumn(name = "workspace_id")
     private Post workspace;
 
+    @Setter
     @Enumerated(EnumType.STRING)
     private AccessRole Level;
+
+
+    public void updateLevel(AccessRole role) {
+        this.Level = role;
+    }
 }

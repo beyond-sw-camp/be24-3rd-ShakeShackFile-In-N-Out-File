@@ -1,6 +1,7 @@
 package com.example.WaffleBear.workspace.service;
 
 import com.example.WaffleBear.common.model.BaseResponse;
+import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.email.EmailVerifyRepository;
 import com.example.WaffleBear.email.EmailVerifyService;
@@ -15,16 +16,12 @@ import com.example.WaffleBear.workspace.model.relation.UserPost;
 import com.example.WaffleBear.workspace.model.relation.UserPostDto;
 import com.example.WaffleBear.workspace.repository.PostRepository;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.swing.text.html.Option;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 
@@ -183,15 +180,51 @@ public class PostService {
         pr.save(result.getWorkspace());
     }
 
-    public List<UserPostDto.ReqRole> loadRole(Long post_idx, Long user_idx) {
+    public List<UserPostDto.ResRole> loadRole(Long post_idx, Long user_idx) {
 
+        // 해당하는 Post 가 있는지 확인
         UserPost result = upr.findByUser_IdxAndWorkspace_Idx(user_idx, post_idx)
-                .orElseThrow(() -> new RuntimeException("해당 권한이 없습니다."));
+                .orElseThrow(() -> new RuntimeException("해당 워크스페이스에 접근할 수 없습니다."));
+        // Post 는 있지만 해당하는 유저가 Admin 이 아닐 경우
+        if(!result.getLevel().equals(AccessRole.ADMIN)) {
+            throw new RuntimeException("해당 유저는 ADMIN이 아닙니다.");
+        }
 
         List<UserPost> load = upr.findAllByWorkspace_idx(post_idx);
 
+        return load.stream().map(UserPostDto.ResRole::from).toList();
+    }
 
-        return load.stream().map(UserPostDto.ReqRole::from).toList();
+    @Transactional
+    public Optional<BaseResponseStatus> saveRole(Long post_idx, AuthUserDetails Admin, Map<Long,AccessRole> role) {
+
+        // 유저가 해당하는 Post 가 있는지 확인
+        UserPost result = upr.findByUser_IdxAndWorkspace_Idx(Admin.getIdx(), post_idx)
+                .orElseThrow(() -> new RuntimeException("해당 워크스페이스에 접근할 수 없습니다."));
+        // Post 는 있지만 해당하는 유저가 Admin 이 아닐 경우
+        if(!result.getLevel().equals(AccessRole.ADMIN)) {
+            throw new RuntimeException("해당 유저는 ADMIN이 아닙니다.");
+        }
+        List<Long> user_list = new ArrayList<>(role.keySet());
+
+        List<UserPost> updateRole =
+                upr.findAllByWorkspaceIdAndUserIdsExceptAdmin(
+                        user_list,
+                        post_idx,
+                        Admin.getIdx()
+                );
+        System.out.println(updateRole.size());
+
+        updateRole.forEach(userPost -> {
+            Long user_idx = userPost.getUser().getIdx();
+            AccessRole newRole = role.get(user_idx);
+            System.out.println(user_idx + " " + newRole);
+
+            userPost.updateLevel(newRole);
+        });
+        System.out.println("조회된 유저 수: " + updateRole.size());
+
+        return Optional.of(SUCCESS);
     }
 
     public List<PostDto.ResList> list(Long user_idx) {

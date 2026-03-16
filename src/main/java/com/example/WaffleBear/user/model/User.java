@@ -1,8 +1,9 @@
 package com.example.WaffleBear.user.model;
 
-import com.example.WaffleBear.file.model.FileInfo;
+//import com.example.WaffleBear.file.model.FileInfo;
 import jakarta.persistence.*;
 import lombok.*;
+import org.apache.tomcat.jni.FileInfo;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.util.List;
@@ -30,8 +31,8 @@ public class User {
     @ColumnDefault(value = "'ROLE_USER'")
     private String role;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    List<FileInfo> fileInfoList;
+//    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+//    List<FileInfo> fileInfoList;
 
     // 결제 기록이 있는지, 현재 플랜은 어떤건지 추가
 }
