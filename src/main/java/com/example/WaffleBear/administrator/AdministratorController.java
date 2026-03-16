@@ -1,5 +1,6 @@
 package com.example.WaffleBear.administrator;
 
+import com.example.WaffleBear.administrator.model.AdministratorDto;
 import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import lombok.RequiredArgsConstructor;

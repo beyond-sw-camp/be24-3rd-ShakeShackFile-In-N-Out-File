@@ -4,6 +4,7 @@ import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.model.UserAccountStatus;
 import com.example.WaffleBear.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -13,11 +14,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AdministratorBootstrap implements ApplicationRunner {
 
-    private static final String ADMIN_LOGIN_ID = "administrator@administrator.adm";
-    private static final String ADMIN_EMAIL = "administrator@administrator.adm";
-    private static final String ADMIN_NAME = "administrator";
-    private static final String ADMIN_ROLE = "ROLE_ADMIN";
-    private static final String ADMIN_PASSWORD = "fweiuhfge2232n12@#xSD23@";
+    @Value("${admin.login-id}") private String ADMIN_LOGIN_ID;
+    @Value("${admin.email}") private String ADMIN_EMAIL;
+    @Value("${admin.name}") private String ADMIN_NAME;
+    @Value("${admin.role}") private String ADMIN_ROLE;
+    @Value("${admin.password}") private String ADMIN_PASSWORD;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
