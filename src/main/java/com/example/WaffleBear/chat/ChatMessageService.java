@@ -61,14 +61,25 @@ public class ChatMessageService {
         for (ChatParticipants participant : participants) {
             Long userIdx = participant.getUsers().getIdx();
             boolean isActive = chatRoomService.isActiveInRoom(roomIdx, userIdx);
-            System.out.println("알림 체크 - 방:" + roomIdx + " 유저:" + userIdx + " 접속중:" + isActive + " 발신자:" + senderIdx);
+            System.out.println("isActive 실제값 : "+ isActive);
             if (!userIdx.equals(senderIdx)) {
                 if (!chatRoomService.isActiveInRoom(roomIdx, userIdx)) { // 접속 중인지 체크
+                    // 해당 유저의 안읽은 메시지 수 계산
+                    ChatParticipants p = participantsRepository
+                            .findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
+                            .orElse(null);
+                    long unreadCount = p != null
+                            ? chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThan(
+                            roomIdx,
+                            p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L
+                    )
+                            : 0L;
                     notificationService.sendToUser(
                             userIdx,
                             room.getTitle(),
                             user.getName() + ": " + message.getContents(),
-                            roomIdx
+                            roomIdx,
+                            unreadCount
                     );
                 }
             }
