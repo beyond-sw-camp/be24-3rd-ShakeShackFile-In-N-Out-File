@@ -1,6 +1,7 @@
 package com.example.WaffleBear.feater;
 
 import com.example.WaffleBear.common.model.BaseResponse;
+import com.example.WaffleBear.feater.model.FeaterDto;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;

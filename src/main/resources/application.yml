@@ -7,6 +7,14 @@ jwt:
 project:
   aes:
     key: aessecretkey01234567891011121314
+
+admin:
+  login-id: ${ADMIN_LOGIN_ID}
+  email: ${ADMIN_EMAIL}
+  name: ${ADMIN_NAME}
+  role: ${ADMIN_ROLE}
+  password: ${ADMIN_PASSWORD}
+
 spring:
   security:
     oauth2:

@@ -1,4 +1,4 @@
-package com.example.WaffleBear.feater;
+package com.example.WaffleBear.feater.model;
 
 import com.example.WaffleBear.user.model.User;
 import jakarta.persistence.Column;
@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class FeaterSettings {
+public class Feater {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
