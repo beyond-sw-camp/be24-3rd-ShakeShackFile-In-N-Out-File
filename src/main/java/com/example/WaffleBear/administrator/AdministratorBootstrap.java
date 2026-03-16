@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class AdministratorBootstrap implements ApplicationRunner {
 
-    @Value("${admin.login-id}") private String ADMIN_LOGIN_ID;
     @Value("${admin.email}") private String ADMIN_EMAIL;
     @Value("${admin.name}") private String ADMIN_NAME;
     @Value("${admin.role}") private String ADMIN_ROLE;
@@ -40,10 +39,24 @@ public class AdministratorBootstrap implements ApplicationRunner {
         admin.setRole(ADMIN_ROLE);
         admin.setAccountStatus(UserAccountStatus.ACTIVE);
 
-        if (admin.getPassword() == null || !passwordEncoder.matches(ADMIN_PASSWORD, admin.getPassword())) {
+        if (shouldResetPassword(admin.getPassword())) {
             admin.setPassword(passwordEncoder.encode(ADMIN_PASSWORD));
         }
 
         userRepository.save(admin);
+    }
+
+    private boolean shouldResetPassword(String storedPassword) {
+        if (storedPassword == null || storedPassword.isBlank()) {
+            return true;
+        }
+
+        try {
+            return !passwordEncoder.matches(ADMIN_PASSWORD, storedPassword);
+        } catch (IllegalArgumentException exception) {
+            // Legacy plain-text or unknown encoded passwords should be replaced
+            // with the configured administrator password on startup.
+            return true;
+        }
     }
 }

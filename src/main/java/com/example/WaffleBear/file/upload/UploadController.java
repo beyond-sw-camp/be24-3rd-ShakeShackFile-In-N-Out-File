@@ -33,6 +33,7 @@ public class UploadController {
         return ResponseEntity.ok(uploadService.init(userIdx, files));
     }
 
+    // 업로드가 완료될 경우 실행하는 것인데, DB에 저장했다는 값을 적용 즉, 데이터 불일치를 없에기 위해 작업
     @PostMapping("/complete")
     public ResponseEntity<UploadDto.CompleteRes> completeUpload(
             @AuthenticationPrincipal AuthUserDetails dto,
