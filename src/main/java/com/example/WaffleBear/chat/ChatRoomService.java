@@ -6,19 +6,21 @@ import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.User;
-import jakarta.transaction.Transactional;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +30,9 @@ public class ChatRoomService {
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
     private final ChatMessageRepository chatMessageRepository;
+
+    // 특정 방에 현재 접속 중인 사용자들의 ID 세트 (방ID -> 사용자ID 세트)
+    private final Map<Long, Set<Long>> activeUsers = new ConcurrentHashMap<>();
 
         // 1. 방 생성 (내부에 초대 로직 포함)
         @Transactional
@@ -113,5 +118,24 @@ public class ChatRoomService {
                 .orElseThrow(() -> new IllegalArgumentException("해당 채팅방 참여 정보를 찾을 수 없습니다."));
 
         participant.setCustomRoomName(newTitle);
+    }
+    public void enterRoom(Long roomIdx, Long userIdx) {
+        activeUsers.computeIfAbsent(roomIdx, k -> ConcurrentHashMap.newKeySet()).add(userIdx);
+        System.out.println("✅ enterRoom - 방:" + roomIdx + " 유저:" + userIdx);
+        System.out.println("현재 activeUsers: " + activeUsers);
+    }
+
+    public void leaveRoom(Long roomIdx, Long userIdx) {
+        Set<Long> users = activeUsers.get(roomIdx);
+        if (users != null) users.remove(userIdx);
+        System.out.println("🚪 leaveRoom - 방:" + roomIdx + " 유저:" + userIdx);
+        System.out.println("현재 activeUsers: " + activeUsers);
+    }
+
+    public boolean isActiveInRoom(Long roomIdx, Long userIdx) {
+        Set<Long> users = activeUsers.get(roomIdx);
+        System.out.println("방번호: " + roomIdx + ", 유저: " + userIdx + ", 접속상태: " + (users != null && users.contains(userIdx))); // 로그 추가
+        return users != null && users.contains(userIdx);
+
     }
 }
