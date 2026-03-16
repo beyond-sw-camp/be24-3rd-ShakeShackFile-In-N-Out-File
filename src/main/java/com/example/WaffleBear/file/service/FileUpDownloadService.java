@@ -1,37 +1,37 @@
 package com.example.WaffleBear.file.service;
 
-import com.example.WaffleBear.file.model.FileInfoDto;
+import com.example.WaffleBear.file.dto.FileCommonDto;
+import com.example.WaffleBear.file.info.dto.FileInfoDto;
+import com.example.WaffleBear.file.manage.dto.FileManageDto;
 
 import java.util.List;
 
 public interface FileUpDownloadService {
-    List<FileInfoDto.FileRes> fileUpload(List<FileInfoDto.FileReq> requests);
+    List<FileCommonDto.FileListItemRes> fileList(Long idx);
 
-    FileInfoDto.CompleteRes completeUpload(FileInfoDto.CompleteReq request);
+    FileCommonDto.FileListItemRes createFolder(Long userIdx, FileManageDto.FolderReq request);
 
-    FileInfoDto.FileActionRes abortUpload(Long userIdx, FileInfoDto.AbortReq request);
+    FileCommonDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx);
 
-    FileInfoDto.FileRes fileDownload(FileInfoDto.FileReq dto);
+    FileCommonDto.FileActionRes restoreFromTrash(Long userIdx, Long fileIdx);
 
-    List<FileInfoDto.FileListItemRes> fileList(Long idx);
+    FileCommonDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx);
 
-    FileInfoDto.FileListItemRes createFolder(FileInfoDto.FolderReq request);
+    FileCommonDto.FileActionRes clearTrash(Long userIdx);
 
-    FileInfoDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx);
+    FileCommonDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId);
 
-    FileInfoDto.FileActionRes deletePermanently(Long userIdx, Long fileIdx);
-
-    FileInfoDto.FileActionRes clearTrash(Long userIdx);
-
-    FileInfoDto.FileActionRes moveToFolder(Long userIdx, Long fileIdx, Long targetParentId);
-
-    FileInfoDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName);
+    FileCommonDto.FileListItemRes renameFolder(Long userIdx, Long folderIdx, String folderName);
 
     FileInfoDto.FolderPropertyRes getFolderProperties(Long userIdx, Long folderIdx);
 
-    FileInfoDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId);
+    FileCommonDto.FileActionRes moveFilesToFolder(Long userIdx, List<Long> fileIdxList, Long targetParentId);
+
+    FileCommonDto.FileActionRes restoreFilesFromTrash(Long userIdx, List<Long> fileIdxList);
 
     FileInfoDto.StorageSummaryRes getStorageSummary(Long userIdx);
 
     FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx);
+
+    FileCommonDto.FileActionRes setLockedFiles(Long userIdx, List<Long> fileIdxList, boolean locked);
 }

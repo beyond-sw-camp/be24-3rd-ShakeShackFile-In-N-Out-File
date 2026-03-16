@@ -1,10 +1,12 @@
 package com.example.WaffleBear.administrator;
 
+import com.example.WaffleBear.administrator.model.AdministratorDto;
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.file.FileUpDownloadRepository;
 import com.example.WaffleBear.file.model.FileInfo;
 import com.example.WaffleBear.file.model.FileNodeType;
+import com.example.WaffleBear.file.service.StoragePlanService;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.model.UserAccountStatus;
@@ -14,9 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -26,16 +26,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdministratorService {
 
-    private static final long BASIC_STORAGE_BYTES = 20L * 1024 * 1024 * 1024;
-    private static final long PLUS_STORAGE_BYTES = 100L * 1024 * 1024 * 1024;
-    private static final long PREMIUM_STORAGE_BYTES = 200L * 1024 * 1024 * 1024;
-    private static final long ADMIN_STORAGE_BYTES = 10L * 1024 * 1024 * 1024 * 1024;
     private static final String ADMIN_LOGIN_ID = "administrator@administrator.adm";
     private static final String ADMIN_ROLE = "ROLE_ADMIN";
 
     private final UserRepository userRepository;
     private final FileUpDownloadRepository fileUpDownloadRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final StoragePlanService storagePlanService;
 
     public AdministratorDto.DashboardRes getDashboard(AuthUserDetails adminUser) {
         validateAdministrator(adminUser);
@@ -54,7 +51,7 @@ public class AdministratorService {
         long totalFileCount = statsByUserIdx.values().stream().mapToLong(UserFileStat::fileCount).sum();
         long totalFolderCount = statsByUserIdx.values().stream().mapToLong(UserFileStat::folderCount).sum();
         long totalUsedBytes = statsByUserIdx.values().stream().mapToLong(UserFileStat::usedBytes).sum();
-        long totalQuotaBytes = users.stream().mapToLong(user -> resolvePlan(user.getRole()).quotaBytes()).sum();
+        long totalQuotaBytes = users.stream().mapToLong(user -> resolvePlan(user).quotaBytes()).sum();
 
         List<AdministratorDto.UserRes> userResponses = users.stream()
                 .map(user -> toUserResponse(user, statsByUserIdx.getOrDefault(user.getIdx(), UserFileStat.empty())))
@@ -102,7 +99,7 @@ public class AdministratorService {
         userRepository.save(targetUser);
 
         if (targetStatus != UserAccountStatus.ACTIVE) {
-            refreshTokenRepository.deleteByEmail(targetUser.getEmail());
+          refreshTokenRepository.deleteByEmail(targetUser.getEmail());
         }
 
         UserFileStat stat = aggregateUserFileStats(fileUpDownloadRepository.findAllByUser_Idx(targetUser.getIdx()))
@@ -144,7 +141,7 @@ public class AdministratorService {
         Map<String, PlanAggregate> aggregates = new HashMap<>();
 
         for (User user : users) {
-            StoragePlan plan = resolvePlan(user.getRole());
+            StoragePlan plan = resolvePlan(user);
             UserFileStat stat = statsByUserIdx.getOrDefault(user.getIdx(), UserFileStat.empty());
             aggregates.computeIfAbsent(plan.code(), ignored -> new PlanAggregate(plan))
                     .add(stat.usedBytes());
@@ -175,7 +172,7 @@ public class AdministratorService {
     }
 
     private AdministratorDto.UserRes toUserResponse(User user, UserFileStat stat) {
-        StoragePlan plan = resolvePlan(user.getRole());
+        StoragePlan plan = resolvePlan(user);
         return AdministratorDto.UserRes.builder()
                 .idx(user.getIdx())
                 .id(resolveUserId(user))
@@ -222,20 +219,9 @@ public class AdministratorService {
         return Math.round((numerator * 10000.0) / denominator) / 100.0;
     }
 
-    private StoragePlan resolvePlan(String role) {
-        String normalizedRole = role == null ? "" : role.toUpperCase(Locale.ROOT);
-
-        if (normalizedRole.contains("ADMIN")) {
-            return new StoragePlan("ADMIN", "관리자 10TB", ADMIN_STORAGE_BYTES);
-        }
-        if (normalizedRole.contains("VIP") || normalizedRole.contains("ENTERPRISE")) {
-            return new StoragePlan("PREMIUM", "프리미엄 200GB", PREMIUM_STORAGE_BYTES);
-        }
-        if (normalizedRole.contains("PREMIUM") || normalizedRole.contains("PRO") || normalizedRole.contains("PLUS")) {
-            return new StoragePlan("PLUS", "플러스 100GB", PLUS_STORAGE_BYTES);
-        }
-
-        return new StoragePlan("FREE", "무료 20GB", BASIC_STORAGE_BYTES);
+    private StoragePlan resolvePlan(User user) {
+        StoragePlanService.StorageQuota quota = storagePlanService.resolveQuota(user);
+        return new StoragePlan(quota.planCode(), quota.planLabel(), quota.totalQuotaBytes());
     }
 
     private record StoragePlan(String code, String label, long quotaBytes) {

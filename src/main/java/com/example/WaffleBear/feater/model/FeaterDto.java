@@ -1,4 +1,4 @@
-package com.example.WaffleBear.feater;
+package com.example.WaffleBear.feater.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -48,6 +48,8 @@ public class FeaterDto {
         private String membershipLabel;
         private String storagePlanLabel;
         private Long storageQuotaBytes;
+        private Long storageBaseQuotaBytes;
+        private Long storageAddonBytes;
         private LocalDateTime joinedAt;
         private LocalDateTime updatedAt;
     }
