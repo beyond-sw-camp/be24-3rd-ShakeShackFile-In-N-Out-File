@@ -18,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Map;
 
 
 
@@ -58,11 +59,18 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
 
         // 3. HTTP 응답 제어 (Refresh Token -> HttpOnly Cookie)
         Cookie refreshCookie = new Cookie("refresh", tokens.refreshToken());
-        refreshCookie.setMaxAge(14 * 24 * 60 * 6000000);
+        refreshCookie.setMaxAge(14 * 24 * 60 * 60);
         refreshCookie.setHttpOnly(true);
         refreshCookie.setPath("/");
         // refreshCookie.setSecure(true); // 운영 환경(HTTPS)에서는 필수 활성화
         response.addCookie(refreshCookie);
+
+        response.setContentType("application/json;charset=UTF-8");
+        new ObjectMapper().writeValue(response.getWriter(), Map.of(
+                "accessToken", tokens.accessToken(),
+                "email", user.getEmail(),
+                "role", user.getRole()
+        ));
     }
 
     @Override
