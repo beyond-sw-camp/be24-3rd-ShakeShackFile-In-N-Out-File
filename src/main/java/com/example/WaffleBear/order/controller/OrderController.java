@@ -6,7 +6,10 @@ import com.example.WaffleBear.order.service.OrderService;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -28,6 +31,6 @@ public class OrderController {
             @AuthenticationPrincipal AuthUserDetails userDetails,
             @RequestBody OrderDto.OrderVerifyRequest requestDto) {
         orderService.verifyAndCompleteOrder(userDetails.getEmail(), requestDto);
-        return BaseResponse.success("결제가 성공적으로 완료되었습니다.");
+        return BaseResponse.success("결제가 정상적으로 완료되었습니다.");
     }
 }

@@ -1,4 +1,4 @@
-package com.example.WaffleBear.administrator;
+package com.example.WaffleBear.administrator.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

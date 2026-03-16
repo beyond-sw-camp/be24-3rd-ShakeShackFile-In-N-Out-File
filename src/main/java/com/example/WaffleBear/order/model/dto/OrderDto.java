@@ -5,13 +5,13 @@ import java.math.BigDecimal;
 public class OrderDto {
 
     public record OrderRequest(
-            String planType,
-            BigDecimal amount
+            String productCode
     ) {}
 
     public record OrderResponse(
             String orderId,
-            String planType,
+            String productCode,
+            String productName,
             BigDecimal amount
     ) {}
 
