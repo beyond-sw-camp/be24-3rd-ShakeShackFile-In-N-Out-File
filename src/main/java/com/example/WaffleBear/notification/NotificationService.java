@@ -71,14 +71,14 @@ public class NotificationService {
 
     }
 
-    public void sendToUser(Long userIdx, String title, String message, Long roomIdx) {
+    public void sendToUser(Long userIdx, String title, String message, Long roomIdx, Long unreadCount) {
         notificationRepository.findByUserIdx(userIdx).forEach(entity -> {
             try {
                 Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
                 Subscription subscription = new Subscription(entity.getEndpoint(), keys);
                 Notification notification = new Notification(
                         subscription,
-                        NotificationDto.Payload.create(title, message, roomIdx).toString()
+                        NotificationDto.Payload.create(title, message, roomIdx, unreadCount).toString()
                 );
                 pushService.send(notification);
             } catch (Exception e) {
