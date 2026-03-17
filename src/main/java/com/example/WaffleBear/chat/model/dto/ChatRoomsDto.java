@@ -4,6 +4,7 @@ import com.example.WaffleBear.chat.ChatMessageRepository;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.model.User;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,7 +18,9 @@ public class ChatRoomsDto {
     @Getter
     public static class ChatRoomsReq {
         private String title;
-        private List<Long> participantsIdx;
+        // 최소 1명 이상은 초대해야 함을 명시
+        @NotEmpty(message = "초대할 유저를 입력해주세요.")
+        private List<String> participantsEmail;
 
         // Service로부터 이미 조회된 User 리스트를 전달받아 처리
         public ChatRooms toEntity() {

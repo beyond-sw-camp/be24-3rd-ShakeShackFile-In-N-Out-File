@@ -40,41 +40,64 @@ public class ChatRoomService {
             // 방 엔티티 생성 및 저장
             ChatRooms room = chatRoomRepository.save(dto.toEntity());
 
-            // 초대할 유저 ID 목록 (나 포함)
-            Set<Long> allUserIdx = new HashSet<>(dto.getParticipantsIdx());
-            allUserIdx.add(myIdx);
+            // 이메일 리스트를 User 객체 리스트로 변환 (유효성 검사 포함)
+            Set<User> invitees = new HashSet<>();
 
-            // 공통 초대 메서드 호출
-            this.addParticipantsToRoom(room, allUserIdx);
+            // 내 정보 추가
+            invitees.add(userRepository.findById(myIdx)
+                    .orElseThrow(() -> new RuntimeException("내 정보를 찾을 수 없습니다.")));
 
+            // 초대받은 이메일들 처리
+            if (dto.getParticipantsEmail() != null) {
+                for (String email : dto.getParticipantsEmail()) {
+                    User user = userRepository.findByEmail(email)
+                            .orElseThrow(() -> new RuntimeException("존재하지 않는 유저입니다: " + email));
+                    invitees.add(user);
+                }
+            }
+            this.addParticipantsToRoom(room, invitees);
             return room.getIdx();
         }
 
-        // 2. 기존 방에 추가 초대 (초대하기 기능)
-        @Transactional
-        public void inviteUsers(Long roomId, List<Long> userIdx) {
-            ChatRooms room = chatRoomRepository.findById(roomId)
-                    .orElseThrow(() -> new IllegalArgumentException("방이 존재하지 않습니다."));
+    @Transactional
+    public void inviteUsersByEmail(Long roomId, List<String> emails) {
+        ChatRooms room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new IllegalArgumentException("방이 존재하지 않습니다."));
 
-            // 공통 초대 메서드 호출
-            this.addParticipantsToRoom(room, new HashSet<>(userIdx));
+        // 1. DB에서 이메일에 해당하는 유저들을 한꺼번에 가져옴 (쿼리 1번)
+        List<User> foundUsers = userRepository.findAllByEmailIn(emails);
+
+        // 2. 입력받은 이메일 개수와 DB에서 찾은 유저 수가 다르면 없는 유저가 섞여 있는 것
+        if (foundUsers.size() != emails.size()) {
+            // 어떤 이메일이 없는지 찾아서 알려주면 더 친절함
+            Set<String> foundEmails = foundUsers.stream()
+                    .map(User::getEmail)
+                    .collect(Collectors.toSet());
+
+            String missingEmails = emails.stream()
+                    .filter(e -> !foundEmails.contains(e))
+                    .collect(Collectors.joining(", "));
+
+            throw new RuntimeException("존재하지 않는 유저가 포함되어 있습니다: " + missingEmails);
         }
 
-        // [공통 로직] 실제 참가자 테이블에 저장하는 메서드
-        private void addParticipantsToRoom(ChatRooms room, Set<Long> userIdx) {
-            List<User> users = userRepository.findAllById(userIdx);
+        // 3. 공통 메서드로 전달 (이미 Set<User> 형태이므로 중복 자동 제거)
+        this.addParticipantsToRoom(room, new HashSet<>(foundUsers));
+    }
 
-            List<ChatParticipants> participants = users.stream()
-                    .filter(user -> !participantsRepository
-                            .existsByChatRoomsIdxAndUsersIdx(room.getIdx(), user.getIdx())) // ← 이미 있으면 제외
-                    .map(user -> ChatParticipantsDto.Create.toEntity(room, user))
-                    .collect(Collectors.toList());
+    // [개선된 공통 로직] 중복 방지 강화
+    private void addParticipantsToRoom(ChatRooms room, Set<User> users) {
+        List<ChatParticipants> newParticipants = users.stream()
+                // 중복 체크: 이미 DB에 해당 방-유저 조합이 있는지 확인
+                .filter(user -> !participantsRepository.existsByChatRoomsIdxAndUsersIdx(room.getIdx(), user.getIdx()))
+                .map(user -> ChatParticipantsDto.Create.toEntity(room, user))
+                .collect(Collectors.toList());
 
-            if (!participants.isEmpty()) {
-                participantsRepository.saveAll(participants);
-            }
-
+        if (!newParticipants.isEmpty()) {
+            participantsRepository.saveAll(newParticipants);
         }
+    }
+
 
     public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
         List<ChatParticipants> sorted = participantsRepository.findAllByUsersIdx(userIdx)
@@ -107,9 +130,13 @@ public class ChatRoomService {
     public void exit(Long roomIdx, Long userIdx) {
         // 1. 해당 방에서 내가 참여자인지 확인하고 삭제
         participantsRepository.deleteByChatRoomsIdxAndUsersIdx(roomIdx, userIdx);
-
-        // 2. (선택 사항) 만약 방에 남은 참여자가 아무도 없다면 방 자체를 삭제
+        participantsRepository.flush();
+        // 2. 방에 남은 사람이 더 이상 없는지 확인
         if (!participantsRepository.existsByChatRoomsIdx(roomIdx)) {
+            // 3. (중요) 해당 방의 메시지를 먼저 삭제해야 외래키 오류가 안 남
+            chatMessageRepository.deleteAllByChatRoomsIdx(roomIdx);
+            chatMessageRepository.flush(); // DB에 즉시 반영
+            // 4. 마지막으로 방 삭제
             chatRoomRepository.deleteById(roomIdx);
         }
     }
