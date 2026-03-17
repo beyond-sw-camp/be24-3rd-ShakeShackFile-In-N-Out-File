@@ -61,6 +61,8 @@ public class FeaterService {
         User user = getUser(userIdx);
         Feater settings = getOrCreateSettings(user);
 
+        String displayName = normalizeDisplayName(request.getDisplayName());
+
         settings.update(
                 normalizeDisplayName(request.getDisplayName()),
                 normalizeLocaleCode(request.getLocaleCode()),
@@ -71,6 +73,9 @@ public class FeaterService {
                 request.getSecurityNotification() != null ? request.getSecurityNotification() : Boolean.TRUE,
                 settings.getProfileImageUrl()
         );
+
+        user.setName(displayName);
+        userRepository.save(user);
 
         Feater saved = featerRepository.save(settings);
         return toResponse(user, saved);
@@ -351,5 +356,12 @@ public class FeaterService {
         }
 
         return value.matches("[A-Za-z0-9._-]+");
+    }
+
+    // 채팅에서 쓸 프로필사진
+    public String resolveProfileImage(Long userIdx) {
+        return featerRepository.findByUser_Idx(userIdx)
+                .map(f -> resolveProfileImagePreview(f.getProfileImageUrl()))
+                .orElse(null);
     }
 }
