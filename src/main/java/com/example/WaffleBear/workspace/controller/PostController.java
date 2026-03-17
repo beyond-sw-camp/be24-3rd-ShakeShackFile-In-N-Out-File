@@ -66,6 +66,16 @@ public class PostController {
 
         return BaseResponse.success(ResponseEntity.ok(result));
     }
+    @PostMapping("/delete/list/{idx}")
+    public BaseResponse list_delete(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable("idx") Long post_idx) {
+
+        Long check_user = user.getIdx();
+        Optional<BaseResponse>result = ps.list_delete(post_idx, check_user);
+
+        return BaseResponse.success(ResponseEntity.ok(result));
+    }
 
     @PostMapping("/invite")
     public BaseResponse invite(
