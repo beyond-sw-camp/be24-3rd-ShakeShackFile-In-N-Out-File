@@ -57,8 +57,9 @@ public class ChatMessagesDto {
         private String contents;
         private LocalDateTime createdAt;
         private int messageUnreadCount;
+        private String profileImageUrl;
 
-        public static ListRes from(ChatMessages entity, int messageUnreadCount) {
+        public static ListRes from(ChatMessages entity, int messageUnreadCount, String profileImageUrl) {
             return ListRes.builder()
                     .idx(entity.getIdx())
                     .senderIdx(entity.getSender().getIdx())
@@ -66,11 +67,12 @@ public class ChatMessagesDto {
                     .contents(entity.getContents())
                     .createdAt(entity.getCreatedAt())
                     .messageUnreadCount(messageUnreadCount)
+                    .profileImageUrl(profileImageUrl)
                     .build();
         }
         // 기존 from() 오버로딩 (readCount 없는 버전)
         public static ListRes from(ChatMessages entity) {
-            return from(entity, 0);
+            return from(entity, 0, null);
         }
     }
 }
