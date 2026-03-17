@@ -5,6 +5,7 @@ import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -25,4 +26,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
             @Param("messageIdx") Long messageIdx,
             @Param("senderIdx") Long senderIdx
     );
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ChatMessages m WHERE m.chatRooms.idx = :roomIdx")
+    void deleteAllByChatRoomsIdx(Long roomIdx);
 }
