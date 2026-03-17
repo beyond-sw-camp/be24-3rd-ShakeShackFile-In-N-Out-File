@@ -4,6 +4,7 @@ import com.example.WaffleBear.chat.model.dto.ChatMessagesDto;
 import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
+import com.example.WaffleBear.feater.FeaterService;
 import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
@@ -29,6 +30,7 @@ public class ChatMessageService {
     private final NotificationService notificationService;
     private final ChatRoomService chatRoomService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final FeaterService featerService;
 
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
@@ -47,7 +49,8 @@ public class ChatMessageService {
                     int messageUnreadCount = chatMessageRepository.countUnreadParticipants(
                             roomIdx, msg.getIdx(), msg.getSender().getIdx()
                     );
-                    return ChatMessagesDto.ListRes.from(msg, messageUnreadCount);
+                    String profileImageUrl = featerService.resolveProfileImage(msg.getSender().getIdx());
+                    return ChatMessagesDto.ListRes.from(msg, messageUnreadCount, profileImageUrl);
                 })
                 .toList();
 
@@ -96,7 +99,7 @@ public class ChatMessageService {
         int messageUnreadCount = chatMessageRepository.countUnreadParticipants(
                 roomIdx, message.getIdx(), senderIdx
         );
-        return ChatMessagesDto.ListRes.from(message, messageUnreadCount);
+        return ChatMessagesDto.ListRes.from(message, messageUnreadCount,null);
     }
 
     @Transactional
