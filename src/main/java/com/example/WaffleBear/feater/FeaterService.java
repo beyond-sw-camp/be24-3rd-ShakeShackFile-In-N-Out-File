@@ -37,7 +37,7 @@ public class FeaterService {
     private static final int PROFILE_IMAGE_SIZE = 300;
     private static final int PROFILE_IMAGE_MAX_DIMENSION = 4096;
     private static final long PROFILE_IMAGE_MAX_SOURCE_BYTES = 50L * 1024 * 1024;
-    private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/jpg");
+    private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/jpg", "image/gif");
     private static final String PROFILE_IMAGE_DIRECTORY = "userProfileImage";
     private static final String PROFILE_IMAGE_FILE_NAME = "profile.png";
 
@@ -194,7 +194,7 @@ public class FeaterService {
         }
 
         if (image.getSize() > PROFILE_IMAGE_MAX_SOURCE_BYTES) {
-            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+            throw BaseException.from(BaseResponseStatus.PROFILE_IMAGE_SIZE_OVER);
         }
 
         String contentType = image.getContentType();
