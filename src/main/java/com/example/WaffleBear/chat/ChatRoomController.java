@@ -37,9 +37,9 @@ public class ChatRoomController {
     @PostMapping("/{roomId}/invite")
     public ResponseEntity<Void> inviteUsers(
             @PathVariable Long roomId,
-            @RequestBody List<Long> userIdx // 초대할 유저 ID 리스트
+            @RequestBody List<String> email // 초대할 유저 ID 리스트
     ) {
-        chatRoomService.inviteUsers(roomId, userIdx);
+        chatRoomService.inviteUsersByEmail(roomId, email);
         return ResponseEntity.ok().build();
     }
 

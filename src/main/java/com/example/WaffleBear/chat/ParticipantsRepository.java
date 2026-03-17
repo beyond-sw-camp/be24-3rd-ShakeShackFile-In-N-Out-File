@@ -6,6 +6,7 @@ import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -14,6 +15,8 @@ import java.util.Optional;
 public interface ParticipantsRepository extends JpaRepository<ChatParticipants,Long> {
      boolean existsByChatRoomsIdxAndUsersIdx(Long roomId, Long userIdx);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ChatParticipants p WHERE p.chatRooms.idx = :roomIdx AND p.users.idx = :userIdx")
     void deleteByChatRoomsIdxAndUsersIdx(Long roomIdx, Long userIdx);
 
     boolean existsByChatRoomsIdx(Long roomIdx);
