@@ -65,7 +65,7 @@ public class ChatMessageService {
 
     @Transactional
     public ChatMessagesDto.ListRes saveMessage(Long roomIdx, ChatMessagesDto.Send req, Long senderIdx) {
-        ChatRooms room = chatRoomRepository.findById(roomIdx)
+        ChatRooms room = chatRoomRepository.findByIdWithLock(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
         User user = userRepository.findById(senderIdx)
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다."));
@@ -73,33 +73,30 @@ public class ChatMessageService {
         ChatMessages message = chatMessageRepository.save(req.toEntity(room, user));
         room.updateLastMessage(message.getContents(), message.getCreatedAt());
 
-        // 발신자 자동 읽음 처리
-        participantsRepository.findByChatRoomsIdxAndUsersIdx(roomIdx, senderIdx)
-                .ifPresent(p -> p.updateLastReadMessageId(message.getIdx()));
-
         List<ChatParticipants> participants = participantsRepository.findAllByChatRoomsIdx(roomIdx);
+
         for (ChatParticipants participant : participants) {
             Long userIdx = participant.getUsers().getIdx();
-            if (!userIdx.equals(senderIdx)) {
-                if (!chatRoomService.isActiveInRoom(roomIdx, userIdx)) {
-                    ChatParticipants p = participantsRepository
-                            .findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
-                            .orElse(null);
-                    long unreadCount = p != null
-                            ? chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThan(
-                            roomIdx,
-                            p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L)
-                            : 0L;
-                    notificationService.sendToUser(userIdx, room.getTitle(),
-                            user.getName() + ": " + message.getContents(), roomIdx, unreadCount);
-                }
+
+            if (userIdx.equals(senderIdx)) {
+                // 발신자 읽음 처리 (별도 조회 불필요)
+                participant.updateLastReadMessageId(message.getIdx());
+                continue;
+            }
+
+            if (!chatRoomService.isActiveInRoom(roomIdx, userIdx)) {
+                long unreadCount = chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThan(
+                        roomIdx,
+                        participant.getLastReadMessageId() != null ? participant.getLastReadMessageId() : 0L
+                );
+                notificationService.sendToUser(userIdx, room.getTitle(),
+                        user.getName() + ": " + message.getContents(), roomIdx, unreadCount);
             }
         }
 
-        int messageUnreadCount = chatMessageRepository.countUnreadParticipants(
-                roomIdx, message.getIdx(), senderIdx
-        );
-        return ChatMessagesDto.ListRes.from(message, messageUnreadCount,null);
+        String profileImageUrl = featerService.resolveProfileImage(senderIdx);
+        int messageUnreadCount = chatMessageRepository.countUnreadParticipants(roomIdx, message.getIdx(), senderIdx);
+        return ChatMessagesDto.ListRes.from(message, messageUnreadCount, profileImageUrl);
     }
 
     @Transactional
