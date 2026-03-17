@@ -113,12 +113,10 @@ public class PostService {
             User inviter = ur.findByEmail(email).orElseThrow(
                     () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
             );
-            ns.sendToUser(
+            ns.sendWorkspaceInviteNotification(
                     inviter.getIdx(),
-                    "워크 스페이스 초대",
-                    "새로운 워크스페이스에 초대 되었습니다.",
-                    null,
-                    1L
+                    uuid,           // 초대 토큰 — 수락/거절 시 verify Email에 쓰임
+                    post.getTitle() // 워크스페이스 이름
             );
         }
 
@@ -184,7 +182,7 @@ public class PostService {
         if (result.getStatus() != isShare.Private) {
             upr.save(UserPost.builder()
                     .user(user)
-                    .workspace(pr.findByUUID(uuid).orElseThrow())
+                    .workspace(result)
                     .Level(AccessRole.READ)
                     .build()
             );
