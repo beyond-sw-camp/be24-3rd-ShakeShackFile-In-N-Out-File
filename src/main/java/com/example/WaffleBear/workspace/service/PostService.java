@@ -90,6 +90,15 @@ public class PostService {
         }
     }
 
+    @Transactional
+    public Optional<BaseResponse> list_delete(Long post_idx, Long check_user) {
+
+        upr.deleteByUser_IdxAndWorkspace_Idx(check_user, post_idx).orElseThrow(
+                () -> new RuntimeException("권한이 없습니다."));
+
+        return Optional.of(BaseResponse.success(SUCCESS));
+    }
+
     @Async
     public Optional<BaseResponse> invite(String uuid, String email, AuthUserDetails user) {
 
@@ -100,16 +109,18 @@ public class PostService {
         if(!post.getType()) {
             throw new RuntimeException("파일의 권한이 없습니다.");
         }
-        User inviter = ur.findByEmail(email).orElseThrow(
-                () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
-        );
-        ns.sendToUser(
-                inviter.getIdx(),
-                "워크 스페이스 초대",
-                "새로운 워크스페이스에 초대 되었습니다.",
-                null,
-                1L
-        );
+        if(email != null) {
+            User inviter = ur.findByEmail(email).orElseThrow(
+                    () -> new RuntimeException("해당하는 유저가 없거나 권한이 없습니다.")
+            );
+            ns.sendToUser(
+                    inviter.getIdx(),
+                    "워크 스페이스 초대",
+                    "새로운 워크스페이스에 초대 되었습니다.",
+                    null,
+                    1L
+            );
+        }
 
         // 공유(Shared)일 경우
         if(email != null && post.getStatus() == isShare.Shared) {

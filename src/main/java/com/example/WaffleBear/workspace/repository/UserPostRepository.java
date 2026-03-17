@@ -16,6 +16,9 @@ public interface UserPostRepository extends JpaRepository<UserPost, Long> {
     // 또는 2. 해당 유저의 모든 권한 리스트를 가져옴
     List<UserPost> findAllByWorkspace_idx(Long post_idx);
 
+    // 1. 유저 ID와 워크스페이스 ID를 동시에 만족하는 유일한 데이터를 조회후 삭제
+    Optional<UserPost> deleteByUser_IdxAndWorkspace_Idx(Long userId, Long workspaceId);
+
     // 해당하는 포스트의 모든 유저들 가져옴
     @Query("SELECT up FROM UserPost up " +
             "WHERE up.workspace.idx = :workspaceId " + // 필드명이 'workspace'이므로 up.workspace.idx로 수정
