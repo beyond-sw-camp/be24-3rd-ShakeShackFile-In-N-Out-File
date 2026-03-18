@@ -132,7 +132,6 @@ public class PostService {
         return Optional.of(BaseResponse.success(SUCCESS));
     }
 
-    @Async
     public Optional<BaseResponse> invite(String uuid, String email, AuthUserDetails user) {
         Post post = pr.findByUUID(uuid).orElseThrow(
                 () -> new RuntimeException("워크스페이스를 찾을 수 없습니다.")
