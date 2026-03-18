@@ -24,15 +24,15 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final NotificationListRepository nlr; // ★ 추가
+    private final NotificationListRepository nlr;
     private final PushService pushService;
 
     public NotificationService(
             NotificationRepository notificationRepository,
-            NotificationListRepository nlr // ★ 추가
+            NotificationListRepository nlr
     ) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
         this.notificationRepository = notificationRepository;
-        this.nlr = nlr; // ★ 추가
+        this.nlr = nlr;
 
         if (Security.getProperty(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
@@ -40,21 +40,19 @@ public class NotificationService {
         this.pushService = new PushService();
         this.pushService.setPublicKey("BLHgfPga02L2u89uc4xjhbUFTy_U04rQCjGq7o24oxtqfVmAPHTxOmp6xndSHZtGQpmt7gqTFdMXco2gRNP7_p8");
         this.pushService.setPrivateKey("pWhOI-mTyOyx5hogOmKRiYHDCtm_IMpnz1lzWNdMfKU");
-        this.pushService.setSubject("우리 사이트이다");
+        this.pushService.setSubject("mailto:no-reply@fileinnout.local");
     }
 
-    // ── 기존 메서드 (변경 없음) ───────────────────────────────────────────────
-
     public void subscribe(NotificationDto.Subscribe dto, Long userIdx) {
-        notificationRepository.findByEndpoint(dto.getEndpoint())
+        notificationRepository.findByEndpoint(dto.endpoint())
                 .ifPresentOrElse(
                         existing -> {
                             NotificationEntity updated = NotificationEntity.builder()
                                     .idx(existing.getIdx())
                                     .userIdx(userIdx)
                                     .endpoint(existing.getEndpoint())
-                                    .p256dh(dto.getKeys().get("p256dh"))
-                                    .auth(dto.getKeys().get("auth"))
+                                    .p256dh(dto.keys() != null ? dto.keys().get("p256dh") : null)
+                                    .auth(dto.keys() != null ? dto.keys().get("auth") : null)
                                     .build();
                             notificationRepository.save(updated);
                         },
@@ -63,7 +61,7 @@ public class NotificationService {
     }
 
     public void send(NotificationDto.Send dto) throws GeneralSecurityException, JoseException, IOException, ExecutionException, InterruptedException {
-        NotificationEntity entity = notificationRepository.findById(dto.getIdx()).orElseThrow();
+        NotificationEntity entity = notificationRepository.findById(dto.idx()).orElseThrow();
         Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
         Subscription subscription = new Subscription(entity.getEndpoint(), keys);
         Notification notification = new Notification(subscription, NotificationDto.Payload.from(dto).toString());
@@ -71,32 +69,9 @@ public class NotificationService {
     }
 
     public void sendToUser(Long userIdx, String title, String message, Long roomIdx, Long unreadCount) {
-        notificationRepository.findByUserIdx(userIdx).forEach(entity -> {
-            try {
-                Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
-                Subscription subscription = new Subscription(entity.getEndpoint(), keys);
-                Notification notification = new Notification(
-                        subscription,
-                        NotificationDto.Payload.create(title, message, roomIdx, unreadCount).toString()
-                );
-                pushService.send(notification);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+        sendPayloadToUser(userIdx, NotificationDto.Payload.create(title, message, roomIdx, unreadCount));
     }
 
-    // ── ★ 추가: 워크스페이스 초대 알림 ────────────────────────────────────────
-
-    /**
-     * 초대 이메일 발송 후 호출.
-     * 1) inbox_notification 테이블에 알림 레코드 저장
-     * 2) 해당 유저의 등록된 모든 기기에 웹 푸시 발송
-     *
-     * @param receiverUserIdx 초대받는 유저의 idx (workspace 서비스에서 email → idx 변환 후 전달)
-     * @param uuid            초대 토큰 (수락/거절 시 verifyEmail 에 넘길 값)
-     * @param workspaceName   알림 메시지에 표시할 워크스페이스 이름
-     */
     public void sendWorkspaceInviteNotification(Long receiverUserIdx, String uuid, String workspaceName) {
         NotificationListEntity inbox = NotificationListEntity.builder()
                 .receiverUserIdx(receiverUserIdx)
@@ -107,29 +82,23 @@ public class NotificationService {
                 .build();
 
         inbox = nlr.save(inbox);
-
-        NotificationDto.Payload payload = NotificationDto.Payload.createInvite(inbox);
-
-        notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity -> {
-            try {
-                Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
-                Subscription subscription = new Subscription(entity.getEndpoint(), keys);
-                Notification notification = new Notification(subscription, payload.toString());
-                pushService.send(notification);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+        sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(inbox));
     }
 
-    /**
-     * 로그인 유저의 인박스 알림 목록 반환 (최신순)
-     *
-     * @param userIdx 로그인 유저 idx
-     */
+    public void sendGeneralNotification(Long receiverUserIdx, String title, String message) {
+        NotificationListEntity inbox = NotificationListEntity.builder()
+                .receiverUserIdx(receiverUserIdx)
+                .type("general")
+                .title(title)
+                .message(message)
+                .build();
+
+        inbox = nlr.save(inbox);
+        sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(inbox));
+    }
+
     public List<NotificationDto.InboxItem> getInboxNotifications(Long userIdx) {
-        return nlr
-                .findByReceiverUserIdxOrderByCreatedAtDesc(userIdx)
+        return nlr.findByReceiverUserIdxOrderByCreatedAtDesc(userIdx)
                 .stream()
                 .map(NotificationDto.InboxItem::from)
                 .collect(Collectors.toList());
@@ -147,18 +116,29 @@ public class NotificationService {
     }
 
     private NotificationListEntity findInboxTarget(Long userIdx, NotificationDto.Target dto) {
-        if (dto.getId() != null) {
-            return nlr.findByIdxAndReceiverUserIdx(dto.getId(), userIdx)
-                    .orElseThrow(() -> new IllegalArgumentException("알림이 없습니다."));
+        if (dto.id() != null) {
+            return nlr.findByIdxAndReceiverUserIdx(dto.id(), userIdx)
+                    .orElseThrow(() -> new IllegalArgumentException("알림을 찾을 수 없습니다."));
         }
 
-        if (dto.getUuid() != null && !dto.getUuid().isBlank()) {
-            return nlr.findByUuidAndReceiverUserIdx(dto.getUuid(), userIdx)
-                    .orElseThrow(() -> new IllegalArgumentException("알림이 없습니다."));
+        if (dto.uuid() != null && !dto.uuid().isBlank()) {
+            return nlr.findByUuidAndReceiverUserIdx(dto.uuid(), userIdx)
+                    .orElseThrow(() -> new IllegalArgumentException("알림을 찾을 수 없습니다."));
         }
 
         throw new IllegalArgumentException("id 또는 uuid가 필요합니다.");
     }
 
-
+    private void sendPayloadToUser(Long receiverUserIdx, NotificationDto.Payload payload) {
+        notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity -> {
+            try {
+                Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
+                Subscription subscription = new Subscription(entity.getEndpoint(), keys);
+                Notification notification = new Notification(subscription, payload.toString());
+                pushService.send(notification);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
 }

@@ -1,76 +1,90 @@
 package com.example.WaffleBear.workspace.model.post;
 
-import com.example.WaffleBear.user.model.User;
+import com.example.WaffleBear.workspace.model.relation.AccessRole;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import org.checkerframework.checker.units.qual.Acceleration;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 public class PostDto {
 
-    @Setter
-    @Getter
-    public static class ReqPost {
-        private Long idx;
-        private String title;
-        private String contents;
-        @Setter
-        private List<UserPost> user;
-
+    public record ReqPost(
+            Long idx,
+            String title,
+            String contents
+    ) {
         public Post toEntity() {
             return Post.builder()
-                    .idx(this.idx)
-                    .title(this.title)
-                    .contents(this.contents)
-                    .build();
-        }
-    }
-    @Getter
-    @Builder
-    public static class ResPost {
-        private Long idx;
-        private String title;
-        private String contents;
-        private boolean type;
-
-        public static ResPost from(Post entity) {
-            return ResPost.builder()
-                    .idx(entity.getIdx())
-                    .title(entity.getTitle())
-                    .contents(entity.getContents())
-                    .type(entity.getType())
+                    .idx(idx)
+                    .title(title)
+                    .contents(contents)
                     .build();
         }
     }
 
-    @Getter
-    @Builder
-    public static class ResList {
-        private Long post_idx;
-        private String title;
-        private LocalDateTime updatedAt;
-        private isShare status;
-        private String UUID;
-
-        public static ResList from(Post entity) {
-            return ResList.builder()
-                    .post_idx(entity.getIdx())
-                    .title(entity.getTitle())
-                    .updatedAt(entity.getUpdatedAt())
-                    .status(entity.getStatus())
-                    .UUID(entity.getUUID())
-                    .build();
+    public record ResPost(
+            Long idx,
+            String title,
+            String contents,
+            boolean type,
+            isShare status,
+            String uuid,
+            AccessRole accessRole
+    ) {
+        public static ResPost from(Post entity, AccessRole accessRole) {
+            return new ResPost(
+                    entity.getIdx(),
+                    entity.getTitle(),
+                    entity.getContents(),
+                    entity.getType(),
+                    entity.getStatus(),
+                    entity.getUUID(),
+                    accessRole
+            );
         }
     }
 
-    @Getter
-    @Builder
-    public static class ReqType {
-        private Boolean type;
-        private isShare status;
+    public record ResList(
+            Long post_idx,
+            String title,
+            LocalDateTime updatedAt,
+            isShare status,
+            String uuid,
+            AccessRole level
+    ) {
+        public static ResList from(UserPost relation) {
+            Post workspace = relation.getWorkspace();
+            return new ResList(
+                    workspace.getIdx(),
+                    workspace.getTitle(),
+                    workspace.getUpdatedAt(),
+                    workspace.getStatus(),
+                    workspace.getUUID(),
+                    relation.getLevel()
+            );
+        }
+    }
+
+    public record ResUuidLookup(
+            Long idx,
+            String title,
+            String uuid,
+            isShare status,
+            AccessRole accessRole
+    ) {
+        public static ResUuidLookup from(Post entity, AccessRole accessRole) {
+            return new ResUuidLookup(
+                    entity.getIdx(),
+                    entity.getTitle(),
+                    entity.getUUID(),
+                    entity.getStatus(),
+                    accessRole
+            );
+        }
+    }
+
+    public record ReqType(
+            Boolean type,
+            isShare status
+    ) {
     }
 }

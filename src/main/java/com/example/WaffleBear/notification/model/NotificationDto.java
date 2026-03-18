@@ -1,126 +1,128 @@
 package com.example.WaffleBear.notification.model;
 
-import lombok.Builder;
-import lombok.Getter;
-
 import java.time.LocalDateTime;
 import java.util.Map;
 
 public class NotificationDto {
 
-    @Getter
-    public static class Subscribe {
-        private Long userIdx;
-        private String endpoint;
-        private Map<String, String> keys;
-
+    public record Subscribe(
+            Long userIdx,
+            String endpoint,
+            Map<String, String> keys
+    ) {
         public NotificationEntity toEntity(Long userIdx) {
             return NotificationEntity.builder()
                     .userIdx(userIdx)
-                    .endpoint(this.endpoint)
-                    .p256dh(this.keys.get("p256dh"))
-                    .auth(this.keys.get("auth"))
+                    .endpoint(endpoint)
+                    .p256dh(keys != null ? keys.get("p256dh") : null)
+                    .auth(keys != null ? keys.get("auth") : null)
                     .build();
         }
     }
 
-    @Getter
-    public static class Send {
-        private Long idx;
-        private String title;
-        private String message;
+    public record Send(
+            Long idx,
+            String title,
+            String message
+    ) {
     }
 
-    @Getter
-    @Builder
-    public static class InboxItem {
-        private Long idx;
-        private String uuid;
-        private String type;
-        private String title;
-        private String message;
-        private boolean read;
-        private LocalDateTime createdAt;
-
+    public record InboxItem(
+            Long idx,
+            String uuid,
+            String type,
+            String title,
+            String message,
+            boolean read,
+            LocalDateTime createdAt
+    ) {
         public static InboxItem from(NotificationListEntity entity) {
-            return InboxItem.builder()
-                    .idx(entity.getIdx())
-                    .uuid(entity.getUuid())
-                    .type(entity.getType())
-                    .title(entity.getTitle())
-                    .message(entity.getMessage())
-                    .read(entity.isRead())
-                    .createdAt(entity.getCreatedAt())
-                    .build();
+            return new InboxItem(
+                    entity.getIdx(),
+                    entity.getUuid(),
+                    entity.getType(),
+                    entity.getTitle(),
+                    entity.getMessage(),
+                    entity.isRead(),
+                    entity.getCreatedAt()
+            );
         }
     }
 
-    @Getter
-    public static class Target {
-        private Long id;
-        private String uuid;
+    public record Target(
+            Long id,
+            String uuid
+    ) {
     }
 
-    @Getter
-    @Builder
-    public static class Payload {
-        private Long notificationId;
-        private String type;
-        private String uuid;
-        private String title;
-        private String message;
-        private Long roomIdx;
-        private Long unreadCount;
-        private String createdAt;
-
+    public record Payload(
+            Long notificationId,
+            String type,
+            String uuid,
+            String title,
+            String message,
+            Long roomIdx,
+            Long unreadCount,
+            String createdAt
+    ) {
         public static Payload from(Send dto) {
-            return Payload.builder()
-                    .type("general")
-                    .title(dto.getTitle())
-                    .message(dto.getMessage())
-                    .build();
+            return new Payload(
+                    null,
+                    "general",
+                    null,
+                    dto.title(),
+                    dto.message(),
+                    null,
+                    0L,
+                    null
+            );
         }
 
         public static Payload create(String title, String message, Long roomIdx, Long unreadCount) {
-            return Payload.builder()
-                    .type("message")
-                    .title(title)
-                    .message(message)
-                    .roomIdx(roomIdx)
-                    .unreadCount(unreadCount)
-                    .build();
+            return new Payload(
+                    null,
+                    "message",
+                    null,
+                    title,
+                    message,
+                    roomIdx,
+                    unreadCount,
+                    null
+            );
         }
 
-        public static Payload createInvite(NotificationListEntity inbox) {
-            return Payload.builder()
-                    .notificationId(inbox.getIdx())
-                    .type("invite")
-                    .uuid(inbox.getUuid())
-                    .title(inbox.getTitle())
-                    .message(inbox.getMessage())
-                    .roomIdx(null)
-                    .unreadCount(0L)
-                    .createdAt(inbox.getCreatedAt() != null ? inbox.getCreatedAt().toString() : null)
-                    .build();
+        public static Payload fromInbox(NotificationListEntity inbox) {
+            return new Payload(
+                    inbox.getIdx(),
+                    inbox.getType(),
+                    inbox.getUuid(),
+                    inbox.getTitle(),
+                    inbox.getMessage(),
+                    null,
+                    0L,
+                    inbox.getCreatedAt() != null ? inbox.getCreatedAt().toString() : null
+            );
         }
 
         @Override
         public String toString() {
             return String.format(
                     "{\"notificationId\":%s,\"type\":\"%s\",\"uuid\":\"%s\",\"title\":\"%s\",\"message\":\"%s\",\"roomIdx\":%s,\"unreadCount\":%d,\"createdAt\":\"%s\"}",
-                    this.notificationId != null ? this.notificationId : "null",
-                    this.type != null ? this.type : "general",
-                    this.uuid != null ? this.uuid : "",
-                    escape(this.title),
-                    escape(this.message),
-                    this.roomIdx != null ? this.roomIdx : "null",
-                    this.unreadCount != null ? this.unreadCount : 0L,
-                    this.createdAt != null ? this.createdAt : ""
+                    notificationId != null ? notificationId : "null",
+                    type != null ? type : "general",
+                    uuid != null ? uuid : "",
+                    escape(title),
+                    escape(message),
+                    roomIdx != null ? roomIdx : "null",
+                    unreadCount != null ? unreadCount : 0L,
+                    createdAt != null ? createdAt : ""
             );
         }
 
         private String escape(String value) {
-            if (value == null) return "";
+            if (value == null) {
+                return "";
+            }
             return value.replace("\\", "\\\\").replace("\"", "\\\"");
         }
     }
