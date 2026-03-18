@@ -6,6 +6,7 @@ import com.example.WaffleBear.config.interceptor.CheckRoomAuthInterceptor;
 import com.example.WaffleBear.config.interceptor.JwtHandshakeInterceptor;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.utils.JwtUtil;
+import com.example.WaffleBear.workspace.repository.UserPostRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
@@ -33,6 +34,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final ChatRoomService chatRoomService;
     private final JwtUtil jwtUtil;
+    private final UserPostRepository userPostRepository;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -80,13 +82,25 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 // SUBSCRIBE 시 권한 확인
                 if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                     String destination = accessor.getDestination();
+                    Authentication auth = (Authentication) accessor.getUser();
                     if (destination != null && destination.startsWith("/sub/chat/room/")) {
                         Long roomId = Long.parseLong(destination.replace("/sub/chat/room/", ""));
 
-                        Authentication auth = (Authentication) accessor.getUser();
                         if (auth != null && auth.getPrincipal() instanceof AuthUserDetails user) {
                             if (!chatRoomService.isMember(roomId, user.getIdx())) {
                                 throw new RuntimeException("채팅방 접근 권한이 없습니다.");
+                            }
+                        } else {
+                            throw new RuntimeException("인증되지 않은 사용자입니다.");
+                        }
+                    }
+
+                    if (destination != null && destination.startsWith("/sub/workspace/assets/")) {
+                        Long workspaceId = Long.parseLong(destination.replace("/sub/workspace/assets/", ""));
+
+                        if (auth != null && auth.getPrincipal() instanceof AuthUserDetails user) {
+                            if (userPostRepository.findByUser_IdxAndWorkspace_Idx(user.getIdx(), workspaceId).isEmpty()) {
+                                throw new RuntimeException("워크스페이스 접근 권한이 없습니다.");
                             }
                         } else {
                             throw new RuntimeException("인증되지 않은 사용자입니다.");

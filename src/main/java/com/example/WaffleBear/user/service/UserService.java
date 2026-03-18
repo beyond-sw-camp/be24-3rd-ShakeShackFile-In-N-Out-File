@@ -27,6 +27,7 @@ public class UserService implements UserDetailsService {
     private final EmailVerifyRepository emailVerifyRepository;
     private final EmailVerifyService emailVerifyService;
 
+
     public UserDto.SignupRes signup(UserDto.SignupReq dto) {
         if (userRepository.findByEmail(dto.email()).isPresent()) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);

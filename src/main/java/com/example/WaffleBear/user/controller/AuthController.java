@@ -51,4 +51,31 @@ public class AuthController {
 
         return ResponseEntity.ok().body("토큰 재발급 완료");
     }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = null;
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (cookie.getName().equals("refresh")) {
+                    refreshToken = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (refreshToken != null) {
+            authService.logout(refreshToken);
+        }
+
+        Cookie refreshCookie = new Cookie("refresh", null);
+        refreshCookie.setMaxAge(0);
+        refreshCookie.setHttpOnly(true);
+        refreshCookie.setPath("/");
+        // refreshCookie.setSecure(true);
+        response.addCookie(refreshCookie);
+
+        return ResponseEntity.ok().body("로그아웃 완료");
+    }
 }
