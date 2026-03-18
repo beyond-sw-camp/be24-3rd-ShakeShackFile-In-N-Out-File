@@ -40,5 +40,9 @@ public class ChatParticipants {
     public void updateLastReadMessageId(Long messageId) {
         this.lastReadMessageId = messageId;
     }
+
+    public void updateJoinedAt() {
+        this.joinedAt = LocalDateTime.now();
+    }
 }
 

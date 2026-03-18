@@ -9,12 +9,16 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long> {
 
     Page<ChatMessages> findAllByChatRooms(ChatRooms room, Pageable pageable);
     Optional<ChatMessages> findTopByChatRoomsIdxOrderByCreatedAtDesc(Long roomIdx);
+    Page<ChatMessages> findByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtAsc(
+            Long roomIdx, LocalDateTime after, Pageable pageable
+    );
     long countByChatRoomsIdxAndIdxGreaterThan(Long roomIdx, Long lastReadMessageId);
 
     @Query("SELECT COUNT(p) FROM ChatParticipants p " +
@@ -29,4 +33,12 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM ChatMessages m WHERE m.chatRooms.idx = :roomIdx")
     void deleteAllByChatRoomsIdx(Long roomIdx);
+
+    Page<ChatMessages> findAllByChatRoomsAndCreatedAtAfter(ChatRooms room, LocalDateTime joinedAt, Pageable pageable);
+    long countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
+            Long chatRoomsIdx, Long idx, LocalDateTime createdAt
+    );
+    Optional<ChatMessages> findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(
+            Long chatRoomsIdx, LocalDateTime after
+    );
 }

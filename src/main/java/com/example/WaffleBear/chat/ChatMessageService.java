@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,11 +52,18 @@ public class ChatMessageService {
         ChatRooms room = chatRoomRepository.findById(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
 
-        boolean isParticipant = participantsRepository.existsByChatRoomsIdxAndUsersIdx(room.getIdx(), userIdx);
-        if (!isParticipant) throw new RuntimeException("해당 채팅방에 접근 권한이 없습니다.");
+        // ✅ 참여자 정보에서 joinedAt 가져오기
+        ChatParticipants participant = participantsRepository
+                .findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
+                .orElseThrow(() -> new RuntimeException("해당 채팅방에 접근 권한이 없습니다."));
+
+        LocalDateTime joinedAt = participant.getJoinedAt() != null
+                ? participant.getJoinedAt()
+                : LocalDateTime.of(2000, 1, 1, 0, 0); // null 방어용 기본값
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<ChatMessages> result = chatMessageRepository.findAllByChatRooms(room, pageable);
+        Page<ChatMessages> result = chatMessageRepository
+                .findAllByChatRoomsAndCreatedAtAfter(room, joinedAt, pageable);
 
         // 각 메시지마다 readCount 계산
         List<ChatMessagesDto.ListRes> messageList = result.getContent().stream()
