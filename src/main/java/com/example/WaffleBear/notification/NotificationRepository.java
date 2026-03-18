@@ -8,5 +8,6 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<NotificationEntity, Long> {
     List<NotificationEntity> findByUserIdx(Long userIdx);
+    List<NotificationEntity> findAllByEndpoint(String endpoint);
     Optional<NotificationEntity> findByEndpoint(String endpoint); // 엔드포인트 중복 방지용
 }
