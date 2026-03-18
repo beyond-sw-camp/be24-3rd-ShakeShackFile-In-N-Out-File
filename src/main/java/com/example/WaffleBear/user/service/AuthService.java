@@ -124,4 +124,12 @@ public class AuthService {
             throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
         }
     }
+
+    @Transactional
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        refreshTokenRepository.deleteByToken(refreshToken);
+    }
 }
