@@ -10,18 +10,17 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserPostRepository extends JpaRepository<UserPost, Long> {
-    // 1. 유저 ID와 워크스페이스 ID를 동시에 만족하는 유일한 데이터를 조회
     Optional<UserPost> findByUser_IdxAndWorkspace_Idx(Long userId, Long workspaceId);
 
-    // 또는 2. 해당 유저의 모든 권한 리스트를 가져옴
     List<UserPost> findAllByWorkspace_idx(Long post_idx);
 
-    // 1. 유저 ID와 워크스페이스 ID를 동시에 만족하는 유일한 데이터를 조회후 삭제
+    @Query("SELECT up FROM UserPost up JOIN FETCH up.workspace w WHERE up.user.idx = :userIdx ORDER BY w.updatedAt DESC, w.createdAt DESC")
+    List<UserPost> findAllByUser_IdxOrderByWorkspaceUpdatedAtDesc(@Param("userIdx") Long userIdx);
+
     Optional<UserPost> deleteByUser_IdxAndWorkspace_Idx(Long userId, Long workspaceId);
 
-    // 해당하는 포스트의 모든 유저들 가져옴
     @Query("SELECT up FROM UserPost up " +
-            "WHERE up.workspace.idx = :workspaceId " + // 필드명이 'workspace'이므로 up.workspace.idx로 수정
+            "WHERE up.workspace.idx = :workspaceId " +
             "AND up.user.idx IN :userIds " +
             "AND up.user.idx != :adminId")
     List<UserPost> findAllByWorkspaceIdAndUserIdsExceptAdmin(

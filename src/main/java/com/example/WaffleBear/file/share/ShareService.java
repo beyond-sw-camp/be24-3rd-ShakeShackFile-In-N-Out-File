@@ -11,6 +11,7 @@ import com.example.WaffleBear.file.model.FileNodeType;
 import com.example.WaffleBear.file.share.model.ShareDto;
 import com.example.WaffleBear.file.share.model.FileShare;
 import com.example.WaffleBear.file.service.StoragePlanService;
+import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
 import io.minio.CopyObjectArgs;
@@ -29,6 +30,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,6 +47,7 @@ public class ShareService {
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final StoragePlanService storagePlanService;
+    private final NotificationService notificationService;
 
     public List<ShareDto.SharedFileRes> sharedFileList(Long userIdx) {
         requireAuthenticated(userIdx);
@@ -85,29 +88,41 @@ public class ShareService {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        int affectedCount = 0;
-        for (Long fileIdx : fileIdxList.stream().filter(Objects::nonNull).distinct().toList()) {
-            FileInfo file = getOwnedFile(userIdx, fileIdx);
-            ensureShareableFile(file);
+        List<FileInfo> newlySharedFiles = fileIdxList.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(fileIdx -> {
+                    FileInfo file = getOwnedFile(userIdx, fileIdx);
+                    ensureShareableFile(file);
 
-            if (shareRepository.findByFile_IdxAndRecipient_Idx(fileIdx, recipient.getIdx()).isPresent()) {
-                continue;
-            }
+                    if (shareRepository.findByFile_IdxAndRecipient_Idx(fileIdx, recipient.getIdx()).isPresent()) {
+                        return null;
+                    }
 
-            shareRepository.save(FileShare.builder()
-                    .file(file)
-                    .owner(file.getUser())
-                    .recipient(recipient)
-                    .build());
-            file.changeSharedFile(true);
-            fileUpDownloadRepository.save(file);
-            affectedCount += 1;
+                    shareRepository.save(FileShare.builder()
+                            .file(file)
+                            .owner(file.getUser())
+                            .recipient(recipient)
+                            .build());
+                    file.changeSharedFile(true);
+                    fileUpDownloadRepository.save(file);
+                    return file;
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (!newlySharedFiles.isEmpty()) {
+            notificationService.sendGeneralNotification(
+                    recipient.getIdx(),
+                    "파일 공유",
+                    buildFileShareMessage(newlySharedFiles)
+            );
         }
 
         return FileCommonDto.FileActionRes.builder()
                 .targetIdx(null)
                 .action("share")
-                .affectedCount(affectedCount)
+                .affectedCount(newlySharedFiles.size())
                 .build();
     }
 
@@ -122,15 +137,20 @@ public class ShareService {
 
         for (Long fileIdx : fileIdxList.stream().filter(Objects::nonNull).distinct().toList()) {
             FileInfo file = getOwnedFile(userIdx, fileIdx);
-            shareRepository.findByFile_IdxAndRecipient_Email(fileIdx, normalizedEmail)
-                    .ifPresent(share -> {
-                        shareRepository.delete(share);
-                    });
+            boolean removed = false;
+
+            Optional<FileShare> share = shareRepository.findByFile_IdxAndRecipient_Email(fileIdx, normalizedEmail);
+            if (share.isPresent()) {
+                shareRepository.delete(share.get());
+                removed = true;
+            }
 
             long remain = shareRepository.countByFile_Idx(file.getIdx());
             file.changeSharedFile(remain > 0);
             fileUpDownloadRepository.save(file);
-            affectedCount += 1;
+            if (removed) {
+                affectedCount += 1;
+            }
         }
 
         return FileCommonDto.FileActionRes.builder()
@@ -287,43 +307,54 @@ public class ShareService {
     }
 
     private ShareDto.ShareInfoRes toShareInfo(FileShare share) {
-        return ShareDto.ShareInfoRes.builder()
-                .shareIdx(share.getIdx())
-                .fileIdx(share.getFile() != null ? share.getFile().getIdx() : null)
-                .fileOriginName(share.getFile() != null ? share.getFile().getFileOriginName() : null)
-                .ownerName(share.getOwner() != null ? share.getOwner().getName() : null)
-                .ownerEmail(share.getOwner() != null ? share.getOwner().getEmail() : null)
-                .recipientName(share.getRecipient() != null ? share.getRecipient().getName() : null)
-                .recipientEmail(share.getRecipient() != null ? share.getRecipient().getEmail() : null)
-                .createdAt(share.getCreatedAt())
-                .build();
+        return new ShareDto.ShareInfoRes(
+                share.getIdx(),
+                share.getFile() != null ? share.getFile().getIdx() : null,
+                share.getFile() != null ? share.getFile().getFileOriginName() : null,
+                share.getOwner() != null ? share.getOwner().getName() : null,
+                share.getOwner() != null ? share.getOwner().getEmail() : null,
+                share.getRecipient() != null ? share.getRecipient().getName() : null,
+                share.getRecipient() != null ? share.getRecipient().getEmail() : null,
+                share.getCreatedAt()
+        );
     }
 
     private ShareDto.SharedFileRes toSharedFileRes(FileShare share) {
         FileInfo file = share.getFile();
-        return ShareDto.SharedFileRes.builder()
-                .idx(file.getIdx())
-                .fileOriginName(file.getFileOriginName())
-                .fileSaveName(file.getFileSaveName())
-                .fileSavePath(file.getFileSavePath())
-                .fileFormat(file.getFileFormat())
-                .fileSize(file.getFileSize())
-                .nodeType(resolveNodeType(file).name())
-                .parentId(file.getParent() != null ? file.getParent().getIdx() : null)
-                .lockedFile(file.isLockedFile())
-                .sharedFile(file.isSharedFile())
-                .trashed(file.isTrashed())
-                .deletedAt(file.getDeletedAt())
-                .uploadDate(file.getUploadDate())
-                .lastModifyDate(file.getLastModifyDate())
-                .presignedDownloadUrl(generatePresignedDownloadUrl(file))
-                .thumbnailPresignedUrl(generatePresignedThumbnailUrl(file))
-                .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
-                .sharedWithMe(true)
-                .ownerName(share.getOwner() != null ? share.getOwner().getName() : null)
-                .ownerEmail(share.getOwner() != null ? share.getOwner().getEmail() : null)
-                .sharedAt(share.getCreatedAt())
-                .build();
+        return new ShareDto.SharedFileRes(
+                file.getIdx(),
+                file.getFileOriginName(),
+                file.getFileSaveName(),
+                file.getFileSavePath(),
+                file.getFileFormat(),
+                file.getFileSize(),
+                resolveNodeType(file).name(),
+                file.getParent() != null ? file.getParent().getIdx() : null,
+                file.isLockedFile(),
+                file.isSharedFile(),
+                file.isTrashed(),
+                file.getDeletedAt(),
+                file.getUploadDate(),
+                file.getLastModifyDate(),
+                generatePresignedDownloadUrl(file),
+                generatePresignedThumbnailUrl(file),
+                minioProperties.getPresignedUrlExpirySeconds(),
+                true,
+                share.getOwner() != null ? share.getOwner().getName() : null,
+                share.getOwner() != null ? share.getOwner().getEmail() : null,
+                share.getCreatedAt()
+        );
+    }
+
+    private String buildFileShareMessage(List<FileInfo> files) {
+        FileInfo firstFile = files.get(0);
+        String ownerName = firstFile.getUser() != null ? firstFile.getUser().getName() : "알 수 없는 사용자";
+
+        if (files.size() == 1) {
+            return ownerName + " 님이 '" + firstFile.getFileOriginName() + "' 파일을 공유했습니다.";
+        }
+
+        return ownerName + " 님이 '" + firstFile.getFileOriginName() + "' 외 " + (files.size() - 1) + "개 파일을 공유했습니다.";
     }
 
     private FileCommonDto.FileListItemRes toFileListItem(FileInfo entity) {
