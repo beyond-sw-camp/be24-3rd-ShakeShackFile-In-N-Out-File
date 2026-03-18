@@ -54,4 +54,23 @@ public class NotificationController {
                 Map.of("result", Map.of("body", items))
         );
     }
+
+    @PatchMapping("/read")
+    public ResponseEntity<?> read(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody NotificationDto.Target dto
+    ) {
+        notificationService.markAsRead(user.getIdx(), dto);
+        return ResponseEntity.ok("성공");
+    }
+
+    @DeleteMapping
+    public ResponseEntity<?> delete(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody NotificationDto.Target dto
+    ) {
+        notificationService.deleteNotification(user.getIdx(), dto);
+        return ResponseEntity.ok("성공");
+    }
+
 }

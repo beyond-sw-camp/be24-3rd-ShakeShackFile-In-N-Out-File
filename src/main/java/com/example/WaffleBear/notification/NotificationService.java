@@ -39,7 +39,7 @@ public class NotificationService {
         }
         this.pushService = new PushService();
         this.pushService.setPublicKey("BLHgfPga02L2u89uc4xjhbUFTy_U04rQCjGq7o24oxtqfVmAPHTxOmp6xndSHZtGQpmt7gqTFdMXco2gRNP7_p8");
-        this.pushService.setPrivateKey("비밀임");
+        this.pushService.setPrivateKey("pWhOI-mTyOyx5hogOmKRiYHDCtm_IMpnz1lzWNdMfKU");
         this.pushService.setSubject("우리 사이트이다");
     }
 
@@ -98,7 +98,6 @@ public class NotificationService {
      * @param workspaceName   알림 메시지에 표시할 워크스페이스 이름
      */
     public void sendWorkspaceInviteNotification(Long receiverUserIdx, String uuid, String workspaceName) {
-        // 1. 인박스 알림 저장
         NotificationListEntity inbox = NotificationListEntity.builder()
                 .receiverUserIdx(receiverUserIdx)
                 .uuid(uuid)
@@ -106,14 +105,10 @@ public class NotificationService {
                 .title("워크스페이스 초대")
                 .message("[" + workspaceName + "] 워크스페이스에 초대되었습니다.")
                 .build();
-        nlr.save(inbox);
 
-        // 2. 웹 푸시 발송
-        NotificationDto.Payload payload = NotificationDto.Payload.createInvite(
-                "워크스페이스 초대",
-                "[" + workspaceName + "] 워크스페이스에 초대되었습니다.",
-                uuid
-        );
+        inbox = nlr.save(inbox);
+
+        NotificationDto.Payload payload = NotificationDto.Payload.createInvite(inbox);
 
         notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity -> {
             try {
@@ -139,4 +134,31 @@ public class NotificationService {
                 .map(NotificationDto.InboxItem::from)
                 .collect(Collectors.toList());
     }
+
+    public void markAsRead(Long userIdx, NotificationDto.Target dto) {
+        NotificationListEntity entity = findInboxTarget(userIdx, dto);
+        entity.markAsRead();
+        nlr.save(entity);
+    }
+
+    public void deleteNotification(Long userIdx, NotificationDto.Target dto) {
+        NotificationListEntity entity = findInboxTarget(userIdx, dto);
+        nlr.delete(entity);
+    }
+
+    private NotificationListEntity findInboxTarget(Long userIdx, NotificationDto.Target dto) {
+        if (dto.getId() != null) {
+            return nlr.findByIdxAndReceiverUserIdx(dto.getId(), userIdx)
+                    .orElseThrow(() -> new IllegalArgumentException("알림이 없습니다."));
+        }
+
+        if (dto.getUuid() != null && !dto.getUuid().isBlank()) {
+            return nlr.findByUuidAndReceiverUserIdx(dto.getUuid(), userIdx)
+                    .orElseThrow(() -> new IllegalArgumentException("알림이 없습니다."));
+        }
+
+        throw new IllegalArgumentException("id 또는 uuid가 필요합니다.");
+    }
+
+
 }
