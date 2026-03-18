@@ -17,5 +17,5 @@ public class MinioProperties {
     private String secretKey;
     private String bucket_cloud;
     private String bucket_work;
-    private int presignedUrlExpirySeconds = 600;
+    private int presignedUrlExpirySeconds = 6000;
 }
