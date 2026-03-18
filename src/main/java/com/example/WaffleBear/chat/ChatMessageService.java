@@ -4,10 +4,15 @@ import com.example.WaffleBear.chat.model.dto.ChatMessagesDto;
 import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
+import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.feater.FeaterService;
 import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
+import io.minio.PutObjectArgs;
+import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,9 +21,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +38,13 @@ public class ChatMessageService {
     private final ChatRoomService chatRoomService;
     private final SimpMessagingTemplate messagingTemplate;
     private final FeaterService featerService;
+    private final MinioClient minioClient;
+    private final MinioProperties minioProperties;
+    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;   // 5MB
+    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;   // 30MB
+    private static final Set<String> IMAGE_TYPES = Set.of(
+            "image/png", "image/jpeg", "image/jpg"
+    );
 
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
@@ -115,5 +129,44 @@ public class ChatMessageService {
                             Map.of("type", "READ_UPDATE", "userIdx", userIdx)
                     );
                 });
+    }
+
+    public String uploadFile(Long roomIdx, MultipartFile file, Long userIdx) {
+        String contentType = file.getContentType();
+        boolean isImage = IMAGE_TYPES.contains(contentType);
+
+        // 용량 체크
+        if (isImage && file.getSize() > MAX_IMAGE_SIZE) {
+            throw new IllegalArgumentException("이미지는 5MB 이하만 업로드 가능합니다.");
+        }
+        if (!isImage && file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("파일은 30MB 이하만 업로드 가능합니다.");
+        }
+
+        try {
+            String objectKey = "chat/" + roomIdx + "/" + userIdx + "/"
+                    + System.currentTimeMillis() + "_" + file.getOriginalFilename();
+
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .stream(file.getInputStream(), file.getSize(), -1)
+                            .contentType(contentType)
+                            .build()
+            );
+
+            // presigned URL 반환
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .expiry(60 * 60 * 24) // 24시간
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("파일 업로드 실패: " + e.getMessage());
+        }
     }
 }

@@ -13,8 +13,10 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -74,5 +76,14 @@ public class ChatMessageController {
         chatMessageService.markAsRead(roomIdx, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success("읽음 처리 완료"));
     }
-    // 복구
+
+    @PostMapping("/{roomIdx}/upload")
+    public ResponseEntity upload(
+            @PathVariable Long roomIdx,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AuthUserDetails user) {
+
+        String fileUrl = chatMessageService.uploadFile(roomIdx, file, user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success(Map.of("fileUrl", fileUrl)));
+    }
 }
