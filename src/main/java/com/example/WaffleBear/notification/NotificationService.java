@@ -9,6 +9,7 @@ import nl.martijndwars.webpush.Subscription;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jose4j.lang.JoseException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -16,7 +17,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Security;
 import java.security.spec.InvalidKeySpecException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -43,21 +46,28 @@ public class NotificationService {
         this.pushService.setSubject("mailto:no-reply@fileinnout.local");
     }
 
-    public void subscribe(NotificationDto.Subscribe dto, Long userIdx) {
-        notificationRepository.findByEndpoint(dto.endpoint())
-                .ifPresentOrElse(
-                        existing -> {
-                            NotificationEntity updated = NotificationEntity.builder()
-                                    .idx(existing.getIdx())
-                                    .userIdx(userIdx)
-                                    .endpoint(existing.getEndpoint())
-                                    .p256dh(dto.keys() != null ? dto.keys().get("p256dh") : null)
-                                    .auth(dto.keys() != null ? dto.keys().get("auth") : null)
-                                    .build();
-                            notificationRepository.save(updated);
-                        },
-                        () -> notificationRepository.save(dto.toEntity(userIdx))
-                );
+    @Transactional
+    public synchronized void subscribe(NotificationDto.Subscribe dto, Long userIdx) {
+        List<NotificationEntity> subscriptions = notificationRepository.findAllByEndpoint(dto.endpoint());
+
+        if (subscriptions.isEmpty()) {
+            notificationRepository.save(dto.toEntity(userIdx));
+            return;
+        }
+
+        NotificationEntity existing = subscriptions.get(0);
+        NotificationEntity updated = NotificationEntity.builder()
+                .idx(existing.getIdx())
+                .userIdx(userIdx)
+                .endpoint(existing.getEndpoint())
+                .p256dh(dto.keys() != null ? dto.keys().get("p256dh") : null)
+                .auth(dto.keys() != null ? dto.keys().get("auth") : null)
+                .build();
+        notificationRepository.save(updated);
+
+        if (subscriptions.size() > 1) {
+            notificationRepository.deleteAll(subscriptions.subList(1, subscriptions.size()));
+        }
     }
 
     public void send(NotificationDto.Send dto) throws GeneralSecurityException, JoseException, IOException, ExecutionException, InterruptedException {
@@ -130,7 +140,12 @@ public class NotificationService {
     }
 
     private void sendPayloadToUser(Long receiverUserIdx, NotificationDto.Payload payload) {
-        notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity -> {
+        Map<String, NotificationEntity> uniqueSubscriptions = new LinkedHashMap<>();
+        notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity ->
+                uniqueSubscriptions.putIfAbsent(entity.getEndpoint(), entity)
+        );
+
+        uniqueSubscriptions.values().forEach(entity -> {
             try {
                 Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
                 Subscription subscription = new Subscription(entity.getEndpoint(), keys);
