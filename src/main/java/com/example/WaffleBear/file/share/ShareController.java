@@ -42,8 +42,8 @@ public class ShareController {
             @RequestBody ShareDto.ShareReq request) {
         return ResponseEntity.ok(shareService.shareFiles(
                 userDetails != null ? userDetails.getIdx() : 0L,
-                request != null ? request.getFileIdxList() : null,
-                request != null ? request.getRecipientEmail() : null
+                request != null ? request.fileIdxList() : null,
+                request != null ? request.recipientEmail() : null
         ));
     }
 
@@ -53,8 +53,8 @@ public class ShareController {
             @RequestBody ShareDto.ShareReq request) {
         return ResponseEntity.ok(shareService.cancelShare(
                 userDetails != null ? userDetails.getIdx() : 0L,
-                request != null ? request.getFileIdxList() : null,
-                request != null ? request.getRecipientEmail() : null
+                request != null ? request.fileIdxList() : null,
+                request != null ? request.recipientEmail() : null
         ));
     }
 
@@ -66,7 +66,7 @@ public class ShareController {
         return ResponseEntity.ok(shareService.saveSharedFileToDrive(
                 userDetails != null ? userDetails.getIdx() : 0L,
                 fileIdx,
-                request != null ? request.getParentId() : null
+                request != null ? request.parentId() : null
         ));
     }
 
