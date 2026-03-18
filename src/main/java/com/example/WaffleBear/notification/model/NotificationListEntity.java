@@ -38,4 +38,9 @@ public class NotificationListEntity {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    public void markAsRead() {
+        this.read = true;
+    }
+
 }
