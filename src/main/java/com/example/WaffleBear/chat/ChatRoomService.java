@@ -4,14 +4,17 @@ import com.example.WaffleBear.chat.model.dto.ChatParticipantsDto;
 import com.example.WaffleBear.chat.model.dto.ChatRoomsDto;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
+import com.example.WaffleBear.chat.model.entity.MessageType;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.User;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,15 +27,38 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+
 public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+
+    public ChatRoomService(ChatRoomRepository chatRoomRepository,
+                           UserRepository userRepository,
+                           ParticipantsRepository participantsRepository,
+                           ChatMessageRepository chatMessageRepository,
+                           @Lazy SimpMessagingTemplate messagingTemplate) {
+        this.chatRoomRepository = chatRoomRepository;
+        this.userRepository = userRepository;
+        this.participantsRepository = participantsRepository;
+        this.chatMessageRepository = chatMessageRepository;
+        this.messagingTemplate = messagingTemplate;
+    }
 
     // 특정 방에 현재 접속 중인 사용자들의 ID 세트 (방ID -> 사용자ID 세트)
     private final Map<Long, Set<Long>> activeUsers = new ConcurrentHashMap<>();
+
+    private void sendSystemMessage(Long roomIdx, String text, MessageType type) {
+        Map<String, Object> payload = Map.of(
+                "roomIdx",     roomIdx,
+                "contents",    text,
+                "messageType", type.name(),
+                "createdAt",   LocalDateTime.now().toString()
+        );
+        messagingTemplate.convertAndSend("/sub/chat/room/" + roomIdx, payload);
+    }
 
         // 1. 방 생성 (내부에 초대 로직 포함)
         @Transactional
@@ -83,6 +109,9 @@ public class ChatRoomService {
 
         // 3. 공통 메서드로 전달 (이미 Set<User> 형태이므로 중복 자동 제거)
         this.addParticipantsToRoom(room, new HashSet<>(foundUsers));
+        for (User user : foundUsers) {
+            sendSystemMessage(roomId, user.getName() + "님이 입장했습니다.", MessageType.ENTER);
+        }
     }
 
     // [개선된 공통 로직] 중복 방지 강화
@@ -128,6 +157,9 @@ public class ChatRoomService {
     }
     @Transactional
     public void exit(Long roomIdx, Long userIdx) {
+        User user = userRepository.findById(userIdx)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. idx: " + userIdx));
+        String name = user.getName();
         // 1. 해당 방에서 내가 참여자인지 확인하고 삭제
         participantsRepository.deleteByChatRoomsIdxAndUsersIdx(roomIdx, userIdx);
         participantsRepository.flush();
@@ -138,6 +170,9 @@ public class ChatRoomService {
             chatMessageRepository.flush(); // DB에 즉시 반영
             // 4. 마지막으로 방 삭제
             chatRoomRepository.deleteById(roomIdx);
+        }else {
+            // ✅ 방이 아직 존재할 때만 퇴장 메시지 전송
+            sendSystemMessage(roomIdx, name + "님이 채팅방을 떠났습니다.", MessageType.EXIT);
         }
     }
     public boolean isMember(Long roomId, Long userIdx) {
