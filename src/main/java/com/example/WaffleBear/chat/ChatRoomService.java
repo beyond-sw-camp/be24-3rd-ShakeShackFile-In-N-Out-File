@@ -116,14 +116,17 @@ public class ChatRoomService {
 
     // [개선된 공통 로직] 중복 방지 강화
     private void addParticipantsToRoom(ChatRooms room, Set<User> users) {
-        List<ChatParticipants> newParticipants = users.stream()
-                // 중복 체크: 이미 DB에 해당 방-유저 조합이 있는지 확인
-                .filter(user -> !participantsRepository.existsByChatRoomsIdxAndUsersIdx(room.getIdx(), user.getIdx()))
-                .map(user -> ChatParticipantsDto.Create.toEntity(room, user))
-                .collect(Collectors.toList());
-
-        if (!newParticipants.isEmpty()) {
-            participantsRepository.saveAll(newParticipants);
+        for (User user : users) {
+            participantsRepository.findByChatRoomsIdxAndUsersIdx(room.getIdx(), user.getIdx())
+                    .ifPresentOrElse(
+                            existing -> {
+                                existing.updateJoinedAt(); // ✅ 재입장 시 joinedAt 갱신
+                                participantsRepository.save(existing);
+                            },
+                            () -> {
+                                participantsRepository.save(ChatParticipantsDto.Create.toEntity(room, user));
+                            }
+                    );
         }
     }
 
@@ -142,19 +145,43 @@ public class ChatRoomService {
         Map<Long, Long> unreadMap = sorted.stream()
                 .collect(Collectors.toMap(
                         p -> p.getChatRooms().getIdx(),
-                        p -> chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThan(
-                                p.getChatRooms().getIdx(),
-                                p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L
-                        )
+                        p -> {// ✅ lastReadMessageId 기준 AND joinedAt 이후 메시지만 카운트
+                                Long lastReadId = p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L;
+        LocalDateTime joinedAt = p.getJoinedAt() != null
+                ? p.getJoinedAt()
+                : LocalDateTime.of(2000, 1, 1, 0, 0);
+
+        return chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
+                p.getChatRooms().getIdx(),
+                lastReadId,
+                joinedAt
+        );
+    }
+            ));
+
+        // ✅ joinedAt 이후 메시지가 있는지 확인해서 lastMessage 덮어쓰기
+        Map<Long, String> lastMessageMap = sorted.stream()
+                .collect(Collectors.toMap(
+                        p -> p.getChatRooms().getIdx(),
+                        p -> {
+                            LocalDateTime joinedAt = p.getJoinedAt() != null
+                                    ? p.getJoinedAt()
+                                    : LocalDateTime.of(2000, 1, 1, 0, 0);
+                            return chatMessageRepository
+                                    .findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(
+                                            p.getChatRooms().getIdx(), joinedAt)
+                                    .map(msg -> msg.getContents())
+                                    .orElse(""); // ✅ joinedAt 이전 메시지면 빈 문자열
+                        }
                 ));
 
-        int start = page * size;
-        int end = Math.min(start + size, sorted.size());
-        List<ChatParticipants> paged = sorted.subList(start, end);
-        Page<ChatParticipants> result = new PageImpl<>(paged, PageRequest.of(page, size), sorted.size());
+    int start = page * size;
+    int end = Math.min(start + size, sorted.size());
+    List<ChatParticipants> paged = sorted.subList(start, end);
+    Page<ChatParticipants> result = new PageImpl<>(paged, PageRequest.of(page, size), sorted.size());
 
-        return ChatRoomsDto.PageRes.from(result, unreadMap);
-    }
+    return ChatRoomsDto.PageRes.from(result, unreadMap, lastMessageMap);
+}
     @Transactional
     public void exit(Long roomIdx, Long userIdx) {
         User user = userRepository.findById(userIdx)
