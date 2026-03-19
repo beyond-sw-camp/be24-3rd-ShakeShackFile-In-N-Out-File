@@ -3,7 +3,12 @@ package com.example.WaffleBear.workspace.asset;
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.config.MinioProperties;
+import com.example.WaffleBear.file.FileUpDownloadRepository;
+import com.example.WaffleBear.file.dto.FileCommonDto;
+import com.example.WaffleBear.file.model.FileInfo;
+import com.example.WaffleBear.file.model.FileNodeType;
 import com.example.WaffleBear.user.model.User;
+import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.workspace.asset.model.WorkspaceAsset;
 import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetDto;
 import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetType;
@@ -11,9 +16,9 @@ import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.relation.AccessRole;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
-import io.minio.BucketExistsArgs;
+import io.minio.CopyObjectArgs;
+import io.minio.CopySource;
 import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectsArgs;
@@ -40,10 +45,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WorkspaceAssetService {
 
+    private static final String DEFAULT_WORKSPACE_BUCKET = "innoutfilebucket";
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
             "jpg", "jpeg", "png", "gif", "svg", "webp", "bmp", "heic", "avif", "apng", "jfif", "tif", "tiff"
     );
 
+    private final FileUpDownloadRepository fileUpDownloadRepository;
+    private final UserRepository userRepository;
     private final WorkspaceAssetRepository workspaceAssetRepository;
     private final UserPostRepository userPostRepository;
     private final MinioClient minioClient;
@@ -78,7 +86,7 @@ public class WorkspaceAssetService {
                 String originalName = sanitizeOriginalName(file.getOriginalFilename());
                 String extension = extractExtension(originalName);
                 String storedFileName = buildStoredFileName(extension);
-                String objectKey = buildObjectKey(permission.workspace(), objectFolder, storedFileName);
+                String objectKey = buildObjectKey(permission.workspace(), userIdx, objectFolder, storedFileName);
                 String contentType = resolveContentType(file.getContentType());
                 WorkspaceAssetType assetType = resolveAssetType(contentType, extension);
 
@@ -135,6 +143,54 @@ public class WorkspaceAssetService {
         publishAssetEvent(permission.workspace().getIdx(), "DELETE", userIdx, List.of(), List.of(asset.getIdx()));
 
         return new WorkspaceAssetDto.ActionRes(asset.getIdx(), "delete");
+    }
+
+    @Transactional
+    public FileCommonDto.FileListItemRes saveAssetToDrive(Long userIdx, Long workspaceIdx, Long assetIdx, Long parentId) {
+        WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, false);
+        WorkspaceAsset asset = workspaceAssetRepository.findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
+
+        FileInfo parentFolder = resolveParentFolder(userIdx, parentId);
+        String sourceBucket = resolveWorkspaceBucketName();
+        String targetBucket = resolveDriveBucketName();
+        String fileFormat = resolveDriveFileFormat(asset);
+        String savedFileName = buildDriveStoredFileName(fileFormat);
+        String savedObjectKey = userIdx + "/" + savedFileName;
+
+        try {
+            minioClient.copyObject(
+                    CopyObjectArgs.builder()
+                            .bucket(targetBucket)
+                            .object(savedObjectKey)
+                            .source(CopySource.builder()
+                                    .bucket(sourceBucket)
+                                    .object(asset.getObjectKey())
+                                    .build())
+                            .build()
+            );
+        } catch (Exception exception) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        FileInfo savedFile = fileUpDownloadRepository.save(
+                FileInfo.builder()
+                        .user(User.builder().idx(userIdx).build())
+                        .parent(parentFolder)
+                        .nodeType(FileNodeType.FILE)
+                        .fileOriginName(asset.getOriginalName())
+                        .fileFormat(fileFormat)
+                        .fileSaveName(savedFileName)
+                        .fileSavePath(savedObjectKey)
+                        .fileSize(asset.getFileSize())
+                        .lockedFile(false)
+                        .sharedFile(false)
+                        .trashed(false)
+                        .deletedAt(null)
+                        .build()
+        );
+
+        return toDriveFileListItem(savedFile, targetBucket);
     }
 
     @Transactional
@@ -208,6 +264,13 @@ public class WorkspaceAssetService {
                 : UUID.randomUUID() + "." + normalizedExtension;
     }
 
+    private String buildDriveStoredFileName(String extension) {
+        String normalizedExtension = extension == null ? "" : extension.trim().toLowerCase(Locale.ROOT);
+        return normalizedExtension.isBlank()
+                ? UUID.randomUUID().toString()
+                : UUID.randomUUID() + "." + normalizedExtension;
+    }
+
     private String resolveContentType(String contentType) {
         String normalized = contentType == null ? "" : contentType.trim();
         return normalized.isBlank() ? "application/octet-stream" : normalized;
@@ -221,12 +284,25 @@ public class WorkspaceAssetService {
         return IMAGE_EXTENSIONS.contains(extension) ? WorkspaceAssetType.IMAGE : WorkspaceAssetType.FILE;
     }
 
-    private String buildObjectKey(Post workspace, String objectFolder, String storedFileName) {
+    private String buildObjectKey(Post workspace, Long userIdx, String objectFolder, String storedFileName) {
+        String userFolder = resolveWorkspaceUserFolder(userIdx);
         String workspaceFolder = workspace.getUUID() != null && !workspace.getUUID().isBlank()
-                ? workspace.getUUID()
+                ? sanitizeFolderSegment(workspace.getUUID())
                 : String.valueOf(workspace.getIdx());
 
-        return "workspace/" + workspaceFolder + "/" + objectFolder + "/" + storedFileName;
+        return "workspace/" + userFolder + "/" + workspaceFolder + "/" + objectFolder + "/" + storedFileName;
+    }
+
+    private String resolveDriveFileFormat(WorkspaceAsset asset) {
+        String originalName = asset == null ? null : asset.getOriginalName();
+        String extension = extractExtension(originalName == null ? "" : originalName);
+        if (!extension.isBlank()) {
+            return extension;
+        }
+
+        String storedFileName = asset == null ? null : asset.getStoredFileName();
+        extension = extractExtension(storedFileName == null ? "" : storedFileName);
+        return extension.isBlank() ? "bin" : extension;
     }
 
     private WorkspaceAssetDto.AssetRes toAssetRes(WorkspaceAsset asset) {
@@ -318,42 +394,96 @@ public class WorkspaceAssetService {
     }
 
     private String resolveWorkspaceBucketName() {
-        String primaryBucket = normalizeBucketName(minioProperties.getBucket_work());
-        if (StringUtils.hasText(primaryBucket)) {
-            ensureBucketExists(primaryBucket);
-            return primaryBucket;
+        return DEFAULT_WORKSPACE_BUCKET;
+    }
+
+    private String resolveDriveBucketName() {
+        return resolveWorkspaceBucketName();
+    }
+
+    private FileInfo resolveParentFolder(Long userIdx, Long parentId) {
+        if (parentId == null) {
+            return null;
         }
 
-        String fallbackBucket = normalizeBucketName(minioProperties.getBucket_cloud());
-        if (!StringUtils.hasText(fallbackBucket)) {
+        FileInfo parent = fileUpDownloadRepository.findByIdxAndUser_Idx(parentId, userIdx)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
+
+        if (parent.isTrashed() || parent.getNodeType() != FileNodeType.FOLDER) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
         }
 
-        ensureBucketExists(fallbackBucket);
-        return fallbackBucket;
+        return parent;
     }
 
-    private String normalizeBucketName(String bucketName) {
-        return bucketName == null ? "" : bucketName.trim();
+    private String resolveWorkspaceUserFolder(Long userIdx) {
+        User user = userRepository.findById(userIdx)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
+
+        String userName = user.getName();
+        if (!StringUtils.hasText(userName)) {
+            userName = user.getEmail();
+        }
+
+        if (!StringUtils.hasText(userName)) {
+            userName = "user-" + userIdx;
+        }
+
+        return sanitizeFolderSegment(userName);
     }
 
-    private void ensureBucketExists(String bucketName) {
+    private String sanitizeFolderSegment(String rawValue) {
+        String normalized = rawValue == null ? "" : rawValue.trim();
+        normalized = normalized.replace("\\", "-").replace("/", "-");
+        normalized = normalized.replaceAll("[^0-9A-Za-z가-힣._-]", "-");
+        normalized = normalized.replaceAll("-{2,}", "-");
+        normalized = normalized.replaceAll("^[-.]+|[-.]+$", "");
+
+        if (!StringUtils.hasText(normalized)) {
+            return "workspace";
+        }
+
+        return normalized;
+    }
+
+    private FileCommonDto.FileListItemRes toDriveFileListItem(FileInfo entity, String bucketName) {
+        return FileCommonDto.FileListItemRes.builder()
+                .idx(entity.getIdx())
+                .fileOriginName(entity.getFileOriginName())
+                .fileSaveName(entity.getFileSaveName())
+                .fileSavePath(entity.getFileSavePath())
+                .fileFormat(entity.getFileFormat())
+                .fileSize(entity.getFileSize())
+                .nodeType(FileNodeType.FILE.name())
+                .parentId(entity.getParent() != null ? entity.getParent().getIdx() : null)
+                .lockedFile(entity.isLockedFile())
+                .sharedFile(entity.isSharedFile())
+                .trashed(entity.isTrashed())
+                .deletedAt(entity.getDeletedAt())
+                .uploadDate(entity.getUploadDate())
+                .lastModifyDate(entity.getLastModifyDate())
+                .presignedDownloadUrl(generateDrivePresignedGetUrl(entity.getFileSavePath(), bucketName))
+                .thumbnailPresignedUrl(null)
+                .presignedUrlExpiresIn(minioProperties.getPresignedUrlExpirySeconds())
+                .build();
+    }
+
+    private String generateDrivePresignedGetUrl(String objectKey, String bucketName) {
+        if (!StringUtils.hasText(objectKey) || !StringUtils.hasText(bucketName)) {
+            return null;
+        }
+
         try {
-            boolean exists = minioClient.bucketExists(
-                    BucketExistsArgs.builder()
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
                             .bucket(bucketName)
+                            .object(objectKey)
+                            .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
             );
-
-            if (!exists) {
-                minioClient.makeBucket(
-                        MakeBucketArgs.builder()
-                                .bucket(bucketName)
-                                .build()
-                );
-            }
         } catch (Exception exception) {
-            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+            return null;
         }
     }
 
