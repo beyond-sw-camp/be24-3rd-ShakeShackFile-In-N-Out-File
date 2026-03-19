@@ -2,6 +2,7 @@ package com.example.WaffleBear.workspace.service;
 
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
+import com.example.WaffleBear.config.sse.SseService;
 import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.email.EmailVerifyRepository;
 import com.example.WaffleBear.email.EmailVerifyService;
@@ -9,7 +10,7 @@ import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
-import com.example.WaffleBear.workspace.asset.WorkspaceAssetService;
+//import com.example.WaffleBear.workspace.asset.WorkspaceAssetService;
 import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.workspace.model.post.isShare;
@@ -37,13 +38,14 @@ import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 @RequiredArgsConstructor
 public class PostService {
 
+    private final SseService sseService;
     private final EmailVerifyRepository evr;
     private final EmailVerifyService evs;
     private final UserRepository ur;
     private final PostRepository pr;
     private final UserPostRepository upr;
     private final NotificationService ns;
-    private final WorkspaceAssetService workspaceAssetService;
+//    private final WorkspaceAssetService workspaceAssetService;
 
     // ─────────────────────────────────────────────────────────────────────────
     // 저장 / 수정
@@ -58,6 +60,10 @@ public class PostService {
                     .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
             result.update(dto.title(), dto.contents());
             pr.save(result);
+            List<Long> user_list = upr.findUserIdsByPostIdx(result.getIdx());
+
+            // 3. SSE를 통해 참여자들에게 실시간 알림 전송
+            sseService.sendTitleUpdate(result.getIdx(), result.getTitle(), user_list);
         } else {
             result = new Post();
             result.update(dto.title(), dto.contents());
@@ -131,7 +137,7 @@ public class PostService {
                 .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
 
         if (result.getLevel().equals(AccessRole.ADMIN)) {
-            workspaceAssetService.deleteAllWorkspaceAssets(result.getWorkspace());
+//            workspaceAssetService.deleteAllWorkspaceAssets(result.getWorkspace());
             pr.delete(result.getWorkspace());
             return SUCCESS;
         }
