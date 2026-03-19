@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
-import com.example.WaffleBear.common.exception.BaseException.*;
 
 import java.util.List;
 import java.util.Map;
