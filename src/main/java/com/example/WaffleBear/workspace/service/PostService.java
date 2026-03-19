@@ -187,6 +187,11 @@ public class PostService {
         Optional<UserPost> relation =
                 upr.findByUser_IdxAndWorkspace_Idx(checkUser.getIdx(), post.getIdx());
 
+        if(email != null) {
+            evr.save(new EmailVerify(uuid, email));
+            evs.sendVerificationEmail(email, checkUser.getName(), uuid);
+        }
+
         if (post.getStatus() == isShare.Public && relation.isEmpty()) {
             upr.save(UserPost.builder()
                     .user(checkUser)
@@ -333,17 +338,8 @@ public class PostService {
             User targetUser = ur.findById(targetUserId)
                     .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
 
-            upr.save(UserPost.builder()
-                    .user(targetUser)
-                    .workspace(workspace)
-                    .Level(AccessRole.READ)
-                    .build());
-
-            ns.sendGeneralNotification(
-                    targetUser.getIdx(),
-                    "워크스페이스 공유",
-                    "[" + workspace.getTitle() + "] 워크스페이스에 초대되었습니다."
-            );
+            evr.save(new EmailVerify(workspace.getUUID(), targetUser.getEmail()));
+            ns.sendWorkspaceInviteNotification(targetUser.getIdx(), workspace.getUUID(), workspace.getTitle());
             affectedCount += 1;
         }
 
