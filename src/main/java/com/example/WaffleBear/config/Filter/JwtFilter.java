@@ -46,6 +46,14 @@ public class JwtFilter extends OncePerRequestFilter {
         // 1. 헤더에서 Authorization 키를 찾음
         String authorization = request.getHeader("Authorization");
 
+        // [추가] 헤더에 토큰이 없는데 SSE 연결 요청(/sse/connect)인 경우, 쿼리 파라미터 확인
+        if (authorization == null && request.getRequestURI().contains("/sse/connect")) {
+            String tokenParam = request.getParameter("token");
+            if (tokenParam != null) {
+                authorization = "Bearer " + tokenParam;
+            }
+        }
+
         // 2. Authorization 헤더가 없거나 Bearer 접두사가 아니면 검증 종료 (다음 필터로)
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             System.out.println("DEBUG: Authorization 헤더가 없거나 형식이 틀림: " + authorization);
