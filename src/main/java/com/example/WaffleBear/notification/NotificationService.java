@@ -8,6 +8,7 @@ import nl.martijndwars.webpush.PushService;
 import nl.martijndwars.webpush.Subscription;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jose4j.lang.JoseException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,6 +79,7 @@ public class NotificationService {
         pushService.send(notification);
     }
 
+    @Async
     public void sendToUser(Long userIdx, String title, String message, Long roomIdx, Long unreadCount) {
         sendPayloadToUser(userIdx, NotificationDto.Payload.create(title, message, roomIdx, unreadCount));
     }
@@ -139,6 +141,8 @@ public class NotificationService {
         throw new IllegalArgumentException("id 또는 uuid가 필요합니다.");
     }
 
+
+    @Async
     private void sendPayloadToUser(Long receiverUserIdx, NotificationDto.Payload payload) {
         Map<String, NotificationEntity> uniqueSubscriptions = new LinkedHashMap<>();
         notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity ->
