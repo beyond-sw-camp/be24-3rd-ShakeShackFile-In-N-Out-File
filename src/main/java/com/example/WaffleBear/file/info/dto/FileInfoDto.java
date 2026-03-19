@@ -67,6 +67,7 @@ public class FileInfoDto {
     public static class StorageSummaryRes {
         private String planCode;
         private String planLabel;
+        private Boolean adminAccount;
         private Boolean shareEnabled;
         private Boolean fileLockEnabled;
         private Long maxUploadFileBytes;

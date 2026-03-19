@@ -24,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -303,6 +305,50 @@ public class PostService {
     // ─────────────────────────────────────────────────────────────────────────
     // 목록 조회
     // ─────────────────────────────────────────────────────────────────────────
+
+    @Transactional
+    public int shareWithUsers(Long postIdx, Long actorUserIdx, Collection<Long> targetUserIds) {
+        UserPost ownerRelation = upr.findByUser_IdxAndWorkspace_Idx(actorUserIdx, postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
+        if (!ownerRelation.getLevel().equals(AccessRole.ADMIN)) {
+            throw new BaseException(ADMIN_ONLY_ACTION);
+        }
+
+        Post workspace = ownerRelation.getWorkspace();
+        if (!Boolean.TRUE.equals(workspace.getType())) {
+            throw new BaseException(WORKSPACE_SHARE_NOT_ALLOWED);
+        }
+
+        int affectedCount = 0;
+        for (Long targetUserId : targetUserIds == null ? List.<Long>of() : targetUserIds.stream().filter(Objects::nonNull).distinct().toList()) {
+            if (Objects.equals(actorUserIdx, targetUserId)) {
+                continue;
+            }
+
+            if (upr.findByUser_IdxAndWorkspace_Idx(targetUserId, postIdx).isPresent()) {
+                continue;
+            }
+
+            User targetUser = ur.findById(targetUserId)
+                    .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
+
+            upr.save(UserPost.builder()
+                    .user(targetUser)
+                    .workspace(workspace)
+                    .Level(AccessRole.READ)
+                    .build());
+
+            ns.sendGeneralNotification(
+                    targetUser.getIdx(),
+                    "워크스페이스 공유",
+                    "[" + workspace.getTitle() + "] 워크스페이스에 초대되었습니다."
+            );
+            affectedCount += 1;
+        }
+
+        return affectedCount;
+    }
 
     @Transactional(readOnly = true)
     public List<PostDto.ResList> list(Long userIdx) {
