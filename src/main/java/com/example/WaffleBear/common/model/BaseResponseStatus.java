@@ -6,33 +6,64 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum BaseResponseStatus {
-    SUCCESS(true, 2000, "\uC694\uCCAD\uC774 \uC131\uACF5\uD588\uC2B5\uB2C8\uB2E4."),
 
-    JWT_EXPIRED(false, 3001, "JWT \uD1A0\uD070\uC774 \uB9CC\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."),
-    JWT_INVALID(false, 3002, "JWT \uD1A0\uD070\uC774 \uC720\uD6A8\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
-    SIGNUP_DUPLICATE_EMAIL(false, 3003, "\uC911\uBCF5\uB41C \uC774\uBA54\uC77C\uC785\uB2C8\uB2E4."),
-    SIGNUP_DUPLICATE_NAME(false, 3004, "\uC911\uBCF5\uB41C \uC774\uB984\uC785\uB2C8\uB2E4."),
-    SIGNUP_INVALID_PASSWORD(false, 3005, "\uBE44\uBC00\uBC88\uD638\uB294 \uC601\uBB38, \uC22B\uC790, \uD2B9\uC218\uBB38\uC790\uB97C \uD3EC\uD568\uD574\uC57C \uD569\uB2C8\uB2E4."),
-    SIGNUP_INVALID_UUID(false, 3006, "\uC720\uD6A8\uD558\uC9C0 \uC54A\uC740 \uC778\uC99D\uAC12\uC785\uB2C8\uB2E4. \uC774\uBA54\uC77C \uC778\uC99D\uC744 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."),
-    LOGIN_INVALID_USERINFO(false, 3007, "\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694."),
+    // ─── 2000 성공 ────────────────────────────────────────────────────────────
+    SUCCESS(true, 2000, "요청이 성공했습니다."),
 
-    FILE_NAME_WRONG(false, 3501, "\uD30C\uC77C \uC774\uB984\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
-    FILE_FORMAT_WRONG(false, 3502, "\uC9C0\uC6D0\uD558\uC9C0 \uC54A\uB294 \uD30C\uC77C \uD615\uC2DD\uC785\uB2C8\uB2E4."),
-    FILE_SIZE_WRONG(false, 3503, "\uD604\uC7AC \uBA64\uBC84\uC2ED\uC758 \uD30C\uC77C \uC5C5\uB85C\uB4DC \uD06C\uAE30 \uC81C\uD55C\uC744 \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4."),
-    FILE_COUNT_WRONG(false, 3504, "\uD55C \uBC88\uC5D0 \uC5C5\uB85C\uB4DC\uD560 \uC218 \uC788\uB294 \uD30C\uC77C \uAC1C\uC218\uB97C \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4."),
-    FILE_UPLOAD_TIMEOUT(false, 3505, "\uD30C\uC77C \uC5C5\uB85C\uB4DC \uC2DC\uAC04\uC774 \uCD08\uACFC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."),
-    FILE_DOWNLOAD_TIMEOUT(false, 3506, "\uD30C\uC77C \uB2E4\uC6B4\uB85C\uB4DC \uC2DC\uAC04\uC774 \uCD08\uACFC\uB418\uC5C8\uC2B5\uB2C8\uB2E4."),
-    FILE_UPDATE_TIMEOUT(false, 3507, "\uD30C\uC77C \uC870\uD68C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."),
-    FILE_EMPTY(false, 3508, "\uC694\uCCAD\uD55C \uD30C\uC77C \uC815\uBCF4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."),
-    FILE_NAME_LENGTH_WRONG(false, 3509, "\uD30C\uC77C \uC774\uB984 \uAE38\uC774\uAC00 \uD5C8\uC6A9 \uBC94\uC704\uB97C \uCD08\uACFC\uD588\uC2B5\uB2C8\uB2E4."),
-    FILE_FORMAT_NOTHING(false, 3510, "\uD30C\uC77C \uD655\uC7A5\uC790\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."),
-    FILE_UPLOADURL_FAIL(false, 3511, "\uC5C5\uB85C\uB4DC URL \uCC98\uB9AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."),
-    STORAGE_QUOTA_EXCEEDED(false, 3512, "\uC800\uC7A5 \uACF5\uAC04\uC774 \uBD80\uC871\uD569\uB2C8\uB2E4. \uC6A9\uB7C9\uC744 \uC815\uB9AC\uD558\uAC70\uB098 \uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9\uC744 \uAD6C\uB9E4\uD574 \uC8FC\uC138\uC694."),
-    PLAN_FEATURE_NOT_AVAILABLE(false, 3513, "\uD604\uC7AC \uBA64\uBC84\uC2ED\uC5D0\uC11C \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uB294 \uAE30\uB2A5\uC785\uB2C8\uB2E4."),
+    // ─── 3000 인증 / JWT ──────────────────────────────────────────────────────
+    JWT_EXPIRED(false, 3001, "JWT 토큰이 만료되었습니다."),
+    JWT_INVALID(false, 3002, "JWT 토큰이 유효하지 않습니다."),
+    SIGNUP_DUPLICATE_EMAIL(false, 3003, "중복된 이메일입니다."),
+    SIGNUP_DUPLICATE_NAME(false, 3004, "중복된 이름입니다."),
+    SIGNUP_INVALID_PASSWORD(false, 3005, "비밀번호는 영문, 숫자, 특수문자를 포함해야 합니다."),
+    SIGNUP_INVALID_UUID(false, 3006, "유효하지 않은 인증값입니다. 이메일 인증을 다시 시도해 주세요."),
+    LOGIN_INVALID_USERINFO(false, 3007, "이메일 또는 비밀번호를 확인해 주세요."),
 
-    REQUEST_ERROR(false, 4001, "\uC785\uB825\uAC12\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."),
-    FAIL(false, 5000, "\uC694\uCCAD \uCC98\uB9AC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."),
-    INVALID_EMAIL_FORMAT(false, 6001, "\uC774\uBA54\uC77C \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
+    // ─── 3500 파일 ────────────────────────────────────────────────────────────
+    FILE_NAME_WRONG(false, 3501, "파일 이름이 올바르지 않습니다."),
+    FILE_FORMAT_WRONG(false, 3502, "지원하지 않는 파일 형식입니다."),
+    FILE_SIZE_WRONG(false, 3503, "현재 멤버십의 파일 업로드 크기 제한을 초과했습니다."),
+    FILE_COUNT_WRONG(false, 3504, "한 번에 업로드할 수 있는 파일 개수를 초과했습니다."),
+    FILE_UPLOAD_TIMEOUT(false, 3505, "파일 업로드 시간이 초과되었습니다."),
+    FILE_DOWNLOAD_TIMEOUT(false, 3506, "파일 다운로드 시간이 초과되었습니다."),
+    FILE_UPDATE_TIMEOUT(false, 3507, "파일 조회에 실패했습니다."),
+    FILE_EMPTY(false, 3508, "요청한 파일 정보가 없습니다."),
+    FILE_NAME_LENGTH_WRONG(false, 3509, "파일 이름 길이가 허용 범위를 초과했습니다."),
+    FILE_FORMAT_NOTHING(false, 3510, "파일 확장자가 없습니다."),
+    FILE_UPLOADURL_FAIL(false, 3511, "업로드 URL 처리에 실패했습니다."),
+    STORAGE_QUOTA_EXCEEDED(false, 3512, "저장 공간이 부족합니다. 용량을 정리하거나 추가 저장용량을 구매해 주세요."),
+    PLAN_FEATURE_NOT_AVAILABLE(false, 3513, "현재 멤버십에서 지원하지 않는 기능입니다."),
+
+    // ─── 4000 요청 오류 ───────────────────────────────────────────────────────
+    REQUEST_ERROR(false, 4001, "입력값이 올바르지 않습니다."),
+
+    // ─── 5000 서버 오류 ───────────────────────────────────────────────────────
+    FAIL(false, 5000, "요청 처리에 실패했습니다."),
+
+    // ─── 6000 이메일 ─────────────────────────────────────────────────────────
+    INVALID_EMAIL_FORMAT(false, 6001, "이메일 형식이 올바르지 않습니다."),
+
+    // ─── 6002~6005 사용자 ─────────────────────────────────────────────────────
+    USER_NOT_FOUND(false, 6002, "해당 사용자가 존재하지 않습니다."),
+    USER_NOT_REGISTERED(false, 6003, "가입되지 않은 이메일입니다. 회원가입을 해주세요."),
+
+    // ─── 6010~6019 워크스페이스 ───────────────────────────────────────────────
+    WORKSPACE_NOT_FOUND(false, 6010, "해당 워크스페이스를 찾을 수 없습니다."),
+    WORKSPACE_ACCESS_DENIED(false, 6011, "워크스페이스 접근 권한이 없습니다."),
+    WORKSPACE_SHARE_NOT_ALLOWED(false, 6012, "이 워크스페이스는 공유 권한이 없습니다."),
+    WORKSPACE_SHARE_ENDED(false, 6013, "워크스페이스 공유가 종료되었습니다."),
+    WORKSPACE_NOT_ACCESSIBLE(false, 6014, "접근 가능한 워크스페이스가 아닙니다."),
+
+    // ─── 6020~6029 이메일 초대 / 인증 토큰 ───────────────────────────────────
+    EMAIL_VERIFY_TOKEN_INVALID(false, 6020, "유효하지 않은 토큰입니다."),
+    EMAIL_VERIFY_TOKEN_EXPIRED(false, 6021, "토큰이 만료되었습니다."),
+    INVITE_REJECTED(false, 6022, "초대를 거절했습니다."),
+    ALREADY_JOINED(false, 6023, "이미 참여 중인 사용자입니다."),
+
+    // ─── 6030~6039 권한 ───────────────────────────────────────────────────────
+    ROLE_SAVE_FAIL(false, 6030, "권한 수정에 실패했습니다."),
+    ROLE_LOAD_FAIL(false, 6031, "권한 조회에 실패했습니다."),
+    ADMIN_ONLY_ACTION(false, 6032, "관리자만 권한을 변경할 수 있습니다.");
 
     private final boolean success;
     private final int code;
