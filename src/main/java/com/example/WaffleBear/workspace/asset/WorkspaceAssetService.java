@@ -46,6 +46,7 @@ import java.util.UUID;
 public class WorkspaceAssetService {
 
     private static final String DEFAULT_WORKSPACE_BUCKET = "innoutfilebucket";
+
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
             "jpg", "jpeg", "png", "gif", "svg", "webp", "bmp", "heic", "avif", "apng", "jfif", "tif", "tiff"
     );
