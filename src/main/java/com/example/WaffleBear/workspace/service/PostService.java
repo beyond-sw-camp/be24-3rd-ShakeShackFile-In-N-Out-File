@@ -1,6 +1,6 @@
 package com.example.WaffleBear.workspace.service;
 
-import com.example.WaffleBear.common.model.BaseResponse;
+import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.email.EmailVerifyRepository;
@@ -19,7 +19,6 @@ import com.example.WaffleBear.workspace.model.relation.UserPostDto;
 import com.example.WaffleBear.workspace.repository.PostRepository;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,13 +29,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import static com.example.WaffleBear.common.model.BaseResponseStatus.FAIL;
-import static com.example.WaffleBear.common.model.BaseResponseStatus.REQUEST_ERROR;
-import static com.example.WaffleBear.common.model.BaseResponseStatus.SUCCESS;
+import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 
 @Service
 @RequiredArgsConstructor
 public class PostService {
+
     private final EmailVerifyRepository evr;
     private final EmailVerifyService evs;
     private final UserRepository ur;
@@ -45,13 +43,17 @@ public class PostService {
     private final NotificationService ns;
     private final WorkspaceAssetService workspaceAssetService;
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 저장 / 수정
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional
     public PostDto.ResPost save(PostDto.ReqPost dto, User user) {
         Post result;
 
         if (dto.idx() != null) {
             result = pr.findById(dto.idx())
-                    .orElseThrow(() -> new IllegalArgumentException("해당 워크스페이스가 존재하지 않습니다."));
+                    .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
             result.update(dto.title(), dto.contents());
             pr.save(result);
         } else {
@@ -70,33 +72,40 @@ public class PostService {
         return PostDto.ResPost.from(result, accessRole);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 단건 조회
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public PostDto.ResPost read(Long postIdx, Long checkUser) {
-        Post result = pr.findById(postIdx).orElseThrow(
-                () -> new RuntimeException("워크스페이스를 찾을 수 없습니다.")
-        );
-        UserPost userPost = upr.findByUser_IdxAndWorkspace_Idx(checkUser, postIdx).orElseThrow(
-                () -> new RuntimeException("워크스페이스 접근 권한이 없습니다.")
-        );
+        Post result = pr.findById(postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
+
+        UserPost userPost = upr.findByUser_IdxAndWorkspace_Idx(checkUser, postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
 
         return PostDto.ResPost.from(result, userPost.getLevel());
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // UUID로 조회
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional
     public PostDto.ResUuidLookup resolveByUuid(Long userIdx, String uuid) {
-        Post workspace = pr.findByUUID(uuid).orElseThrow(
-                () -> new RuntimeException("워크스페이스를 찾을 수 없습니다.")
-        );
+        Post workspace = pr.findByUUID(uuid)
+                .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
 
-        Optional<UserPost> existingAccess = upr.findByUser_IdxAndWorkspace_Idx(userIdx, workspace.getIdx());
+        Optional<UserPost> existingAccess =
+                upr.findByUser_IdxAndWorkspace_Idx(userIdx, workspace.getIdx());
+
         if (existingAccess.isPresent()) {
             return PostDto.ResUuidLookup.from(workspace, existingAccess.get().getLevel());
         }
 
         if (workspace.getStatus() == isShare.Public) {
-            User user = ur.findById(userIdx).orElseThrow(
-                    () -> new RuntimeException("사용자를 찾을 수 없습니다.")
-            );
+            User user = ur.findById(userIdx)
+                    .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
 
             UserPost relation = upr.save(UserPost.builder()
                     .user(user)
@@ -107,150 +116,180 @@ public class PostService {
             return PostDto.ResUuidLookup.from(workspace, relation.getLevel());
         }
 
-        throw new RuntimeException("접근 가능한 워크스페이스가 아닙니다.");
+        throw new BaseException(WORKSPACE_NOT_ACCESSIBLE);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 워크스페이스 삭제 (ADMIN 전용)
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional
-    public Optional<BaseResponse> delete(Long postIdx, Long checkUser) {
-        UserPost result = upr.findByUser_IdxAndWorkspace_Idx(checkUser, postIdx).orElseThrow(
-                () -> new RuntimeException("워크스페이스 접근 권한이 없습니다.")
-        );
+    public BaseResponseStatus delete(Long postIdx, Long checkUser) {
+        UserPost result = upr.findByUser_IdxAndWorkspace_Idx(checkUser, postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
         if (result.getLevel().equals(AccessRole.ADMIN)) {
             workspaceAssetService.deleteAllWorkspaceAssets(result.getWorkspace());
             pr.delete(result.getWorkspace());
-
-            return Optional.of(BaseResponse.success(SUCCESS));
+            return SUCCESS;
         }
-        return Optional.of(BaseResponse.fail(REQUEST_ERROR));
+
+        return FAIL;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 목록에서 워크스페이스 제거 (본인 관계만 삭제)
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Transactional
-    public Optional<BaseResponse> list_delete(Long postIdx, Long checkUser) {
-        upr.deleteByUser_IdxAndWorkspace_Idx(checkUser, postIdx).orElseThrow(
-                () -> new RuntimeException("워크스페이스 접근 권한이 없습니다."));
+    public BaseResponseStatus list_delete(Long postIdx, Long checkUser) {
+        upr.deleteByUser_IdxAndWorkspace_Idx(checkUser, postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
 
-        return Optional.of(BaseResponse.success(SUCCESS));
+        return SUCCESS;
     }
 
-    public Optional<BaseResponse> invite(String uuid, String email, AuthUserDetails user) {
-        Post post = pr.findByUUID(uuid).orElseThrow(
-                () -> new RuntimeException("워크스페이스를 찾을 수 없습니다.")
-        );
+    // ─────────────────────────────────────────────────────────────────────────
+    // 초대
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public BaseResponseStatus invite(String uuid, String email, AuthUserDetails user) {
+        Post post = pr.findByUUID(uuid)
+                .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
+
         if (!post.getType()) {
-            throw new RuntimeException("이 워크스페이스는 공유 권한이 없습니다.");
+            throw new BaseException(WORKSPACE_SHARE_NOT_ALLOWED);
         }
+
+        // 알림 발송 (이메일이 있을 때)
         if (email != null) {
-            User invitee = ur.findByEmail(email).orElseThrow(
-                    () -> new RuntimeException("해당 사용자를 찾을 수 없습니다.")
-            );
+            User invitee = ur.findByEmail(email)
+                    .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
             ns.sendWorkspaceInviteNotification(invitee.getIdx(), uuid, post.getTitle());
         }
 
+        // Shared 상태 + 이메일 초대 → 이메일 인증 링크 발송
         if (email != null && post.getStatus() == isShare.Shared) {
-            User invitedUser = ur.findByEmail(email).orElseThrow(
-                    () -> new RuntimeException("해당 사용자를 찾을 수 없습니다.")
-            );
-            ur.findByEmail(invitedUser.getEmail()).orElseThrow(
-                    () -> new RuntimeException("가입되지 않은 이메일입니다. 회원가입을 해주세요.")
-            );
+            User invitedUser = ur.findByEmail(email)
+                    .orElseThrow(() -> new BaseException(USER_NOT_REGISTERED));
 
             evr.save(new EmailVerify(uuid, email));
             evs.sendVerificationEmail(email, invitedUser.getName(), uuid);
-            return Optional.of(BaseResponse.success("초대 성공"));
+            return SUCCESS;
         }
 
-        User checkUser = ur.findByEmail(user.getEmail()).orElseThrow(
-                () -> new RuntimeException("해당 사용자를 찾을 수 없습니다.")
-        );
+        // Public 워크스페이스 → 현재 사용자 즉시 참여
+        User checkUser = ur.findByEmail(user.getEmail())
+                .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
 
-        Optional<UserPost> result = upr.findByUser_IdxAndWorkspace_Idx(checkUser.getIdx(), post.getIdx());
+        Optional<UserPost> relation =
+                upr.findByUser_IdxAndWorkspace_Idx(checkUser.getIdx(), post.getIdx());
 
-        if (post.getStatus() == isShare.Public && result.isEmpty()) {
+        if (post.getStatus() == isShare.Public && relation.isEmpty()) {
             upr.save(UserPost.builder()
                     .user(checkUser)
                     .workspace(post)
                     .Level(AccessRole.READ)
-                    .build()
-            );
-            return Optional.of(BaseResponse.success("초대 성공"));
+                    .build());
+            return SUCCESS;
         }
-        return Optional.empty();
+
+        return FAIL;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 이메일 초대 수락 / 거절 처리
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional
-    public Optional<BaseResponse> verifyEmail(User user, String uuid, String type) {
-        EmailVerify verificationToken = evr.findByToken(uuid).orElseThrow(
-                () -> new RuntimeException("유효하지 않은 토큰입니다.")
-        );
+    public BaseResponseStatus verifyEmail(User user, String uuid, String type) {
+        EmailVerify verificationToken = evr.findByToken(uuid)
+                .orElseThrow(() -> new BaseException(EMAIL_VERIFY_TOKEN_INVALID));
 
         if (!verificationToken.getEmail().equals(user.getEmail())) {
-            throw new RuntimeException("인증되지 않은 사용자입니다.");
-        } else if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            evr.delete(verificationToken);
-            throw new RuntimeException("토큰이 만료되었습니다.");
+            throw new BaseException(WORKSPACE_ACCESS_DENIED);
         }
+
+        if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            evr.delete(verificationToken);
+            throw new BaseException(EMAIL_VERIFY_TOKEN_EXPIRED);
+        }
+
         if (type.equals("reject")) {
             evr.delete(verificationToken);
-            throw new RuntimeException("초대를 거절했습니다.");
+            throw new BaseException(INVITE_REJECTED);
         }
-        Post result = pr.findByUUID(uuid).orElseThrow(
-                () -> new RuntimeException("워크스페이스 공유가 종료되었습니다.")
-        );
+
+        Post result = pr.findByUUID(uuid)
+                .orElseThrow(() -> new BaseException(WORKSPACE_SHARE_ENDED));
+
         if (upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx()).isPresent()) {
             evr.delete(verificationToken);
-            throw new RuntimeException("이미 참여 중인 사용자입니다.");
+            throw new BaseException(ALREADY_JOINED);
         }
 
         evr.delete(verificationToken);
+
         if (result.getStatus() != isShare.Private) {
             upr.save(UserPost.builder()
                     .user(user)
                     .workspace(result)
                     .Level(AccessRole.READ)
-                    .build()
-            );
-            return Optional.of(BaseResponse.success("초대 성공"));
+                    .build());
+            return SUCCESS;
         }
 
-        return Optional.of(BaseResponse.fail(FAIL));
+        return FAIL;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 공유 상태 변경
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional
-    public void isShared(Long postIdx, Long checkUser, PostDto.ReqType dto) {
+    public BaseResponseStatus isShared(Long postIdx, Long checkUser, PostDto.ReqType dto) {
         UserPost result = upr.findByUser_IdxAndWorkspace_Idx(checkUser, postIdx)
-                .orElseThrow(() -> new IllegalArgumentException("해당 워크스페이스가 존재하지 않습니다."));
+                .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
 
         result.getWorkspace().typeUpdate(dto.type(), dto.status());
         pr.save(result.getWorkspace());
+        return SUCCESS;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 권한 조회
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<UserPostDto.ResRole> loadRole(Long postIdx, Long userIdx) {
         UserPost result = upr.findByUser_IdxAndWorkspace_Idx(userIdx, postIdx)
-                .orElseThrow(() -> new RuntimeException("해당 워크스페이스에 접근할 수 없습니다."));
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
         if (!result.getLevel().equals(AccessRole.ADMIN)) {
-            throw new RuntimeException("관리자만 권한을 변경할 수 있습니다.");
+            throw new BaseException(ADMIN_ONLY_ACTION);
         }
 
         List<UserPost> load = upr.findAllByWorkspace_idx(postIdx);
         return load.stream().map(UserPostDto.ResRole::from).toList();
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 권한 저장
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional
     public BaseResponseStatus saveRole(Long postIdx, AuthUserDetails admin, Map<Long, AccessRole> role) {
         UserPost result = upr.findByUser_IdxAndWorkspace_Idx(admin.getIdx(), postIdx)
-                .orElseThrow(() -> new RuntimeException("해당 워크스페이스에 접근할 수 없습니다."));
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
         if (!result.getLevel().equals(AccessRole.ADMIN)) {
-            throw new RuntimeException("관리자만 권한을 변경할 수 있습니다.");
+            throw new BaseException(ADMIN_ONLY_ACTION);
         }
+
         List<Long> userList = new ArrayList<>(role.keySet());
 
-        List<UserPost> updateRole =
-                upr.findAllByWorkspaceIdAndUserIdsExceptAdmin(
-                        userList,
-                        postIdx,
-                        admin.getIdx()
-                );
+        List<UserPost> updateRole = upr.findAllByWorkspaceIdAndUserIdsExceptAdmin(
+                userList, postIdx, admin.getIdx());
 
         updateRole.forEach(userPost -> {
             Long userIdx = userPost.getUser().getIdx();
@@ -261,9 +300,14 @@ public class PostService {
         return SUCCESS;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // 목록 조회
+    // ─────────────────────────────────────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public List<PostDto.ResList> list(Long userIdx) {
-        List<UserPost> relationList = upr.findAllByUser_IdxOrderByWorkspaceUpdatedAtDesc(userIdx);
+        List<UserPost> relationList =
+                upr.findAllByUser_IdxOrderByWorkspaceUpdatedAtDesc(userIdx);
         return relationList.stream().map(PostDto.ResList::from).toList();
     }
 }
