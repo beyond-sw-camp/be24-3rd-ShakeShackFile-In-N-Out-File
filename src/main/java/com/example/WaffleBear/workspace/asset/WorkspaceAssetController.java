@@ -1,6 +1,7 @@
 package com.example.WaffleBear.workspace.asset;
 
 import com.example.WaffleBear.user.model.AuthUserDetails;
+import com.example.WaffleBear.file.dto.FileCommonDto;
 import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -53,6 +54,23 @@ public class WorkspaceAssetController {
     ) {
         return ResponseEntity.ok(
                 workspaceAssetService.deleteAsset(user != null ? user.getIdx() : 0L, workspaceId, assetId)
+        );
+    }
+
+    @PostMapping("/{workspaceId}/assets/{assetId}/save-to-drive")
+    public ResponseEntity<FileCommonDto.FileListItemRes> saveAssetToDrive(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetId,
+            @RequestParam(required = false) Long parentId
+    ) {
+        return ResponseEntity.ok(
+                workspaceAssetService.saveAssetToDrive(
+                        user != null ? user.getIdx() : 0L,
+                        workspaceId,
+                        assetId,
+                        parentId
+                )
         );
     }
 }
