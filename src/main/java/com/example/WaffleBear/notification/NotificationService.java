@@ -22,25 +22,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final NotificationListRepository nlr;
+    private final NotificationListRepository notificationListRepository;
     private final PushService pushService;
 
     public NotificationService(
             NotificationRepository notificationRepository,
-            NotificationListRepository nlr
+            NotificationListRepository notificationListRepository
     ) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
         this.notificationRepository = notificationRepository;
-        this.nlr = nlr;
+        this.notificationListRepository = notificationListRepository;
 
         if (Security.getProperty(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
         }
+
         this.pushService = new PushService();
         this.pushService.setPublicKey("BLHgfPga02L2u89uc4xjhbUFTy_U04rQCjGq7o24oxtqfVmAPHTxOmp6xndSHZtGQpmt7gqTFdMXco2gRNP7_p8");
         this.pushService.setPrivateKey("pWhOI-mTyOyx5hogOmKRiYHDCtm_IMpnz1lzWNdMfKU");
@@ -71,7 +71,8 @@ public class NotificationService {
         }
     }
 
-    public void send(NotificationDto.Send dto) throws GeneralSecurityException, JoseException, IOException, ExecutionException, InterruptedException {
+    public void send(NotificationDto.Send dto)
+            throws GeneralSecurityException, JoseException, IOException, ExecutionException, InterruptedException {
         NotificationEntity entity = notificationRepository.findById(dto.idx()).orElseThrow();
         Subscription.Keys keys = new Subscription.Keys(entity.getP256dh(), entity.getAuth());
         Subscription subscription = new Subscription(entity.getEndpoint(), keys);
@@ -85,62 +86,95 @@ public class NotificationService {
     }
 
     public void sendWorkspaceInviteNotification(Long receiverUserIdx, String uuid, String workspaceName) {
-        NotificationListEntity inbox = NotificationListEntity.builder()
-                .receiverUserIdx(receiverUserIdx)
-                .uuid(uuid)
-                .type("invite")
-                .title("워크스페이스 초대")
-                .message("[" + workspaceName + "] 워크스페이스에 초대되었습니다.")
-                .build();
+        createAndDispatchNotification(
+                receiverUserIdx,
+                "invite",
+                "워크스페이스 초대",
+                "[" + workspaceName + "] 워크스페이스로 초대되었습니다.",
+                uuid,
+                null
+        );
+    }
 
-        inbox = nlr.save(inbox);
-        sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(inbox));
+    public void sendRelationshipInviteNotification(Long receiverUserIdx, Long inviteId, String senderName) {
+        createAndDispatchNotification(
+                receiverUserIdx,
+                "relationship_invite",
+                "연결 초대",
+                senderName + "님이 연결 요청을 보냈습니다.",
+                null,
+                inviteId
+        );
+    }
+
+    public void sendGroupInviteNotification(Long receiverUserIdx, Long groupInviteId, String groupName, String senderName) {
+        createAndDispatchNotification(
+                receiverUserIdx,
+                "group_invite",
+                "그룹 초대",
+                senderName + "님이 [" + groupName + "] 그룹에 초대했습니다.",
+                null,
+                groupInviteId
+        );
     }
 
     public void sendGeneralNotification(Long receiverUserIdx, String title, String message) {
-        NotificationListEntity inbox = NotificationListEntity.builder()
-                .receiverUserIdx(receiverUserIdx)
-                .type("general")
-                .title(title)
-                .message(message)
-                .build();
-
-        inbox = nlr.save(inbox);
-        sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(inbox));
+        createAndDispatchNotification(receiverUserIdx, "general", title, message, null, null);
     }
 
     public List<NotificationDto.InboxItem> getInboxNotifications(Long userIdx) {
-        return nlr.findByReceiverUserIdxOrderByCreatedAtDesc(userIdx)
+        return notificationListRepository.findByReceiverUserIdxOrderByCreatedAtDesc(userIdx)
                 .stream()
                 .map(NotificationDto.InboxItem::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public void markAsRead(Long userIdx, NotificationDto.Target dto) {
         NotificationListEntity entity = findInboxTarget(userIdx, dto);
         entity.markAsRead();
-        nlr.save(entity);
+        notificationListRepository.save(entity);
     }
 
     public void deleteNotification(Long userIdx, NotificationDto.Target dto) {
         NotificationListEntity entity = findInboxTarget(userIdx, dto);
-        nlr.delete(entity);
+        notificationListRepository.delete(entity);
+    }
+
+    private NotificationListEntity createAndDispatchNotification(
+            Long receiverUserIdx,
+            String type,
+            String title,
+            String message,
+            String uuid,
+            Long referenceId
+    ) {
+        NotificationListEntity inbox = NotificationListEntity.builder()
+                .receiverUserIdx(receiverUserIdx)
+                .uuid(uuid)
+                .referenceId(referenceId)
+                .type(type)
+                .title(title)
+                .message(message)
+                .build();
+
+        NotificationListEntity saved = notificationListRepository.save(inbox);
+        sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(saved));
+        return saved;
     }
 
     private NotificationListEntity findInboxTarget(Long userIdx, NotificationDto.Target dto) {
         if (dto.id() != null) {
-            return nlr.findByIdxAndReceiverUserIdx(dto.id(), userIdx)
+            return notificationListRepository.findByIdxAndReceiverUserIdx(dto.id(), userIdx)
                     .orElseThrow(() -> new IllegalArgumentException("알림을 찾을 수 없습니다."));
         }
 
         if (dto.uuid() != null && !dto.uuid().isBlank()) {
-            return nlr.findByUuidAndReceiverUserIdx(dto.uuid(), userIdx)
+            return notificationListRepository.findByUuidAndReceiverUserIdx(dto.uuid(), userIdx)
                     .orElseThrow(() -> new IllegalArgumentException("알림을 찾을 수 없습니다."));
         }
 
         throw new IllegalArgumentException("id 또는 uuid가 필요합니다.");
     }
-
 
     @Async
     private void sendPayloadToUser(Long receiverUserIdx, NotificationDto.Payload payload) {
@@ -155,8 +189,8 @@ public class NotificationService {
                 Subscription subscription = new Subscription(entity.getEndpoint(), keys);
                 Notification notification = new Notification(subscription, payload.toString());
                 pushService.send(notification);
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception exception) {
+                exception.printStackTrace();
             }
         });
     }

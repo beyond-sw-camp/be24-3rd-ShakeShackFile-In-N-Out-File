@@ -22,6 +22,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class StoragePlanService {
+    private static final String DEFAULT_ADMIN_EMAIL = "administrator@administrator.adm";
 
     public static final long GIGABYTE = 1024L * 1024 * 1024;
     public static final long TERABYTE = 1024L * GIGABYTE;
@@ -46,8 +47,8 @@ public class StoragePlanService {
     private static final Map<String, ProductDefinition> PRODUCT_DEFINITIONS = Map.ofEntries(
             Map.entry("FREE", new ProductDefinition(
                     "FREE",
-                    "\uAE30\uBCF8 20GB",
-                    "\uAE30\uBCF8 \uBA64\uBC84\uC2ED",
+                    "기본 20GB",
+                    "기본 멤버십",
                     CATEGORY_MEMBERSHIP,
                     FREE_STORAGE_BYTES,
                     BigDecimal.ZERO,
@@ -59,8 +60,8 @@ public class StoragePlanService {
             )),
             Map.entry("PLUS", new ProductDefinition(
                     "PLUS",
-                    "\uD50C\uB7EC\uC2A4 500GB",
-                    "\uD50C\uB7EC\uC2A4 \uBA64\uBC84\uC2ED",
+                    "플러스 500GB",
+                    "플러스 멤버십",
                     CATEGORY_MEMBERSHIP,
                     PLUS_STORAGE_BYTES,
                     new BigDecimal("129000"),
@@ -72,8 +73,8 @@ public class StoragePlanService {
             )),
             Map.entry("PREMIUM", new ProductDefinition(
                     "PREMIUM",
-                    "\uD504\uB9AC\uBBF8\uC5C4 1TB",
-                    "\uD504\uB9AC\uBBF8\uC5C4 \uBA64\uBC84\uC2ED",
+                    "프리미엄 1TB",
+                    "프리미엄 멤버십",
                     CATEGORY_MEMBERSHIP,
                     PREMIUM_STORAGE_BYTES,
                     new BigDecimal("229000"),
@@ -85,8 +86,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADDON_20GB", new ProductDefinition(
                     "ADDON_20GB",
-                    "\uCD94\uAC00 20GB",
-                    "\uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9",
+                    "추가 20GB",
+                    "추가 저장용량",
                     CATEGORY_STORAGE,
                     20L * GIGABYTE,
                     new BigDecimal("24000"),
@@ -98,8 +99,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADDON_40GB", new ProductDefinition(
                     "ADDON_40GB",
-                    "\uCD94\uAC00 40GB",
-                    "\uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9",
+                    "추가 40GB",
+                    "추가 저장용량",
                     CATEGORY_STORAGE,
                     40L * GIGABYTE,
                     new BigDecimal("43000"),
@@ -111,8 +112,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADDON_80GB", new ProductDefinition(
                     "ADDON_80GB",
-                    "\uCD94\uAC00 80GB",
-                    "\uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9",
+                    "추가 80GB",
+                    "추가 저장용량",
                     CATEGORY_STORAGE,
                     80L * GIGABYTE,
                     new BigDecimal("79000"),
@@ -124,8 +125,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADDON_100GB", new ProductDefinition(
                     "ADDON_100GB",
-                    "\uCD94\uAC00 100GB",
-                    "\uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9",
+                    "추가 100GB",
+                    "추가 저장용량",
                     CATEGORY_STORAGE,
                     100L * GIGABYTE,
                     new BigDecimal("94000"),
@@ -137,8 +138,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADDON_1TB", new ProductDefinition(
                     "ADDON_1TB",
-                    "\uCD94\uAC00 1TB",
-                    "\uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9",
+                    "추가 1TB",
+                    "추가 저장용량",
                     CATEGORY_STORAGE,
                     1L * TERABYTE,
                     new BigDecimal("249000"),
@@ -150,8 +151,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADDON_5TB", new ProductDefinition(
                     "ADDON_5TB",
-                    "\uCD94\uAC00 5TB",
-                    "\uCD94\uAC00 \uC800\uC7A5\uC6A9\uB7C9",
+                    "추가 5TB",
+                    "추가 저장용량",
                     CATEGORY_STORAGE,
                     5L * TERABYTE,
                     new BigDecimal("890000"),
@@ -163,8 +164,8 @@ public class StoragePlanService {
             )),
             Map.entry("ADMIN", new ProductDefinition(
                     "ADMIN",
-                    "\uAD00\uB9AC\uC790 10TB",
-                    "\uAD00\uB9AC\uC790",
+                    "관리자 10TB",
+                    "관리자",
                     CATEGORY_INTERNAL,
                     ADMIN_STORAGE_BYTES,
                     BigDecimal.ZERO,
@@ -255,7 +256,7 @@ public class StoragePlanService {
         String planLabel = safeProduct.displayName();
 
         if (extraBytes > 0) {
-            planLabel = planLabel + " + \uCD94\uAC00 " + formatQuota(extraBytes);
+            planLabel = planLabel + " + 추가 " + formatQuota(extraBytes);
         }
 
         return new StorageQuota(
@@ -272,8 +273,27 @@ public class StoragePlanService {
         );
     }
 
-    private boolean isAdministrator(User user) {
-        return user.getRole() != null && user.getRole().toUpperCase(Locale.ROOT).contains("ADMIN");
+    public boolean isAdministrator(Long userIdx) {
+        if (userIdx == null || userIdx <= 0) {
+            return false;
+        }
+
+        User user = userRepository.findById(userIdx).orElse(null);
+        return isAdministrator(user);
+    }
+
+    public boolean isAdministrator(User user) {
+        if (user == null) {
+            return false;
+        }
+
+        String role = user.getRole();
+        if (role != null && role.toUpperCase(Locale.ROOT).contains("ADMIN")) {
+            return true;
+        }
+
+        String email = user.getEmail();
+        return email != null && DEFAULT_ADMIN_EMAIL.equalsIgnoreCase(email.trim());
     }
 
     private boolean isCompletedOrder(Order order) {

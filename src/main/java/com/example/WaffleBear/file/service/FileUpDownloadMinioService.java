@@ -424,6 +424,7 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         return FileInfoDto.StorageSummaryRes.builder()
                 .planCode(storageQuota.planCode())
                 .planLabel(storageQuota.planLabel())
+                .adminAccount(storagePlanService.isAdministrator(userIdx))
                 .shareEnabled(storageQuota.shareEnabled())
                 .fileLockEnabled(storageQuota.fileLockEnabled())
                 .maxUploadFileBytes(storageQuota.maxUploadFileBytes())

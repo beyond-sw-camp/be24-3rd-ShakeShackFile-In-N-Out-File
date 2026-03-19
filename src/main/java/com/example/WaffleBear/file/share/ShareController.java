@@ -29,6 +29,12 @@ public class ShareController {
         return ResponseEntity.ok(shareService.sharedFileList(userDetails != null ? userDetails.getIdx() : 0L));
     }
 
+    @GetMapping("/sent/list")
+    public ResponseEntity<List<ShareDto.SentSharedFileRes>> sentSharedFileList(
+            @AuthenticationPrincipal AuthUserDetails userDetails) {
+        return ResponseEntity.ok(shareService.sentSharedFileList(userDetails != null ? userDetails.getIdx() : 0L));
+    }
+
     @GetMapping("/{fileIdx}")
     public ResponseEntity<List<ShareDto.ShareInfoRes>> getShareInfo(
             @AuthenticationPrincipal AuthUserDetails userDetails,
@@ -55,6 +61,16 @@ public class ShareController {
                 userDetails != null ? userDetails.getIdx() : 0L,
                 request != null ? request.fileIdxList() : null,
                 request != null ? request.recipientEmail() : null
+        ));
+    }
+
+    @PostMapping("/cancel-all")
+    public ResponseEntity<FileCommonDto.FileActionRes> cancelAllShares(
+            @AuthenticationPrincipal AuthUserDetails userDetails,
+            @RequestBody ShareDto.CancelAllShareReq request) {
+        return ResponseEntity.ok(shareService.cancelAllShares(
+                userDetails != null ? userDetails.getIdx() : 0L,
+                request != null ? request.fileIdxList() : null
         ));
     }
 
