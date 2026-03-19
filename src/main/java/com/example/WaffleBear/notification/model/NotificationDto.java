@@ -30,6 +30,7 @@ public class NotificationDto {
     public record InboxItem(
             Long idx,
             String uuid,
+            Long referenceId,
             String type,
             String title,
             String message,
@@ -40,6 +41,7 @@ public class NotificationDto {
             return new InboxItem(
                     entity.getIdx(),
                     entity.getUuid(),
+                    entity.getReferenceId(),
                     entity.getType(),
                     entity.getTitle(),
                     entity.getMessage(),
@@ -59,6 +61,7 @@ public class NotificationDto {
             Long notificationId,
             String type,
             String uuid,
+            Long referenceId,
             String title,
             String message,
             Long roomIdx,
@@ -69,6 +72,7 @@ public class NotificationDto {
             return new Payload(
                     null,
                     "general",
+                    null,
                     null,
                     dto.title(),
                     dto.message(),
@@ -83,6 +87,7 @@ public class NotificationDto {
                     null,
                     "message",
                     null,
+                    null,
                     title,
                     message,
                     roomIdx,
@@ -96,6 +101,7 @@ public class NotificationDto {
                     inbox.getIdx(),
                     inbox.getType(),
                     inbox.getUuid(),
+                    inbox.getReferenceId(),
                     inbox.getTitle(),
                     inbox.getMessage(),
                     null,
@@ -107,10 +113,11 @@ public class NotificationDto {
         @Override
         public String toString() {
             return String.format(
-                    "{\"notificationId\":%s,\"type\":\"%s\",\"uuid\":\"%s\",\"title\":\"%s\",\"message\":\"%s\",\"roomIdx\":%s,\"unreadCount\":%d,\"createdAt\":\"%s\"}",
+                    "{\"notificationId\":%s,\"type\":\"%s\",\"uuid\":\"%s\",\"referenceId\":%s,\"title\":\"%s\",\"message\":\"%s\",\"roomIdx\":%s,\"unreadCount\":%d,\"createdAt\":\"%s\"}",
                     notificationId != null ? notificationId : "null",
                     type != null ? type : "general",
                     uuid != null ? uuid : "",
+                    referenceId != null ? referenceId : "null",
                     escape(title),
                     escape(message),
                     roomIdx != null ? roomIdx : "null",

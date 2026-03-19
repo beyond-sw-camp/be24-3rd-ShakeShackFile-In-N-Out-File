@@ -13,6 +13,9 @@ public interface ShareRepository extends JpaRepository<FileShare, Long> {
     List<FileShare> findAllByRecipient_IdxOrderByCreatedAtDesc(Long recipientIdx);
 
     @EntityGraph(attributePaths = {"file", "owner", "recipient"})
+    List<FileShare> findAllByOwner_IdxOrderByCreatedAtDesc(Long ownerIdx);
+
+    @EntityGraph(attributePaths = {"file", "owner", "recipient"})
     List<FileShare> findAllByFile_Idx(Long fileIdx);
 
     @EntityGraph(attributePaths = {"file", "owner", "recipient"})
