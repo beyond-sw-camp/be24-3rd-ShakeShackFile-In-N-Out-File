@@ -19,9 +19,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -115,6 +117,40 @@ public class ChatRoomService {
     }
 
     // [개선된 공통 로직] 중복 방지 강화
+    @Transactional
+    public int inviteUsers(Long roomId, Long actorUserIdx, Collection<Long> userIds) {
+        ChatRooms room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new IllegalArgumentException("채팅방이 존재하지 않습니다."));
+
+        if (!participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, actorUserIdx)) {
+            throw new IllegalArgumentException("채팅방 초대 권한이 없습니다.");
+        }
+
+        List<User> targetUsers = userIds == null
+                ? List.of()
+                : userIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(userId -> userRepository.findById(userId)
+                        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. idx: " + userId)))
+                .filter(user -> !Objects.equals(user.getIdx(), actorUserIdx))
+                .toList();
+
+        Set<User> newUsers = targetUsers.stream()
+                .filter(user -> participantsRepository.findByChatRoomsIdxAndUsersIdx(roomId, user.getIdx()).isEmpty())
+                .collect(Collectors.toSet());
+
+        if (newUsers.isEmpty()) {
+            return 0;
+        }
+
+        this.addParticipantsToRoom(room, newUsers);
+        newUsers.forEach(user ->
+                sendSystemMessage(roomId, user.getName() + "님이 입장했습니다.", MessageType.ENTER)
+        );
+        return newUsers.size();
+    }
+
     private void addParticipantsToRoom(ChatRooms room, Set<User> users) {
         for (User user : users) {
             participantsRepository.findByChatRoomsIdxAndUsersIdx(room.getIdx(), user.getIdx())

@@ -26,9 +26,13 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -57,6 +61,24 @@ public class ShareService {
                 .filter(share -> share.getFile() != null)
                 .filter(share -> !share.getFile().isTrashed())
                 .map(this::toSharedFileRes)
+                .toList();
+    }
+
+    public List<ShareDto.SentSharedFileRes> sentSharedFileList(Long userIdx) {
+        requireAuthenticated(userIdx);
+
+        Map<Long, List<FileShare>> sharesByFileId = new LinkedHashMap<>();
+
+        shareRepository.findAllByOwner_IdxOrderByCreatedAtDesc(userIdx)
+                .stream()
+                .filter(share -> share.getFile() != null)
+                .filter(share -> !share.getFile().isTrashed())
+                .forEach(share -> sharesByFileId
+                        .computeIfAbsent(share.getFile().getIdx(), ignored -> new ArrayList<>())
+                        .add(share));
+
+        return sharesByFileId.values().stream()
+                .map(this::toSentSharedFileRes)
                 .toList();
     }
 
@@ -126,6 +148,68 @@ public class ShareService {
                 .build();
     }
 
+    public int shareFilesToUsers(Long userIdx, List<Long> fileIdxList, Collection<Long> recipientUserIds) {
+        requireAuthenticated(userIdx);
+        StoragePlanService.StorageQuota storageQuota = storagePlanService.resolveQuota(userIdx);
+        if (!storageQuota.shareEnabled()) {
+            throw BaseException.from(BaseResponseStatus.PLAN_FEATURE_NOT_AVAILABLE);
+        }
+        if (fileIdxList == null || fileIdxList.isEmpty() || recipientUserIds == null || recipientUserIds.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        List<User> recipients = recipientUserIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .map(recipientUserId -> userRepository.findById(recipientUserId)
+                        .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND)))
+                .filter(recipient -> !Objects.equals(recipient.getIdx(), userIdx))
+                .toList();
+
+        if (recipients.isEmpty()) {
+            return 0;
+        }
+
+        int affectedCount = 0;
+
+        for (User recipient : recipients) {
+            List<FileInfo> newlySharedFiles = fileIdxList.stream()
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .map(fileIdx -> {
+                        FileInfo file = getOwnedFile(userIdx, fileIdx);
+                        ensureShareableFile(file);
+
+                        if (shareRepository.findByFile_IdxAndRecipient_Idx(fileIdx, recipient.getIdx()).isPresent()) {
+                            return null;
+                        }
+
+                        shareRepository.save(FileShare.builder()
+                                .file(file)
+                                .owner(file.getUser())
+                                .recipient(recipient)
+                                .build());
+                        file.changeSharedFile(true);
+                        fileUpDownloadRepository.save(file);
+                        return file;
+                    })
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            affectedCount += newlySharedFiles.size();
+
+            if (!newlySharedFiles.isEmpty()) {
+                notificationService.sendGeneralNotification(
+                        recipient.getIdx(),
+                        "파일 공유",
+                        buildFileShareMessage(newlySharedFiles)
+                );
+            }
+        }
+
+        return affectedCount;
+    }
+
     public FileCommonDto.FileActionRes cancelShare(Long userIdx, List<Long> fileIdxList, String recipientEmail) {
         requireAuthenticated(userIdx);
         if (fileIdxList == null || fileIdxList.isEmpty() || recipientEmail == null || recipientEmail.isBlank()) {
@@ -156,6 +240,34 @@ public class ShareService {
         return FileCommonDto.FileActionRes.builder()
                 .targetIdx(null)
                 .action("cancel-share")
+                .affectedCount(affectedCount)
+                .build();
+    }
+
+    public FileCommonDto.FileActionRes cancelAllShares(Long userIdx, List<Long> fileIdxList) {
+        requireAuthenticated(userIdx);
+        if (fileIdxList == null || fileIdxList.isEmpty()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        int affectedCount = 0;
+
+        for (Long fileIdx : fileIdxList.stream().filter(Objects::nonNull).distinct().toList()) {
+            FileInfo file = getOwnedFile(userIdx, fileIdx);
+            List<FileShare> shares = shareRepository.findAllByFile_Idx(file.getIdx());
+
+            if (!shares.isEmpty()) {
+                shareRepository.deleteAll(shares);
+                affectedCount += shares.size();
+            }
+
+            file.changeSharedFile(false);
+            fileUpDownloadRepository.save(file);
+        }
+
+        return FileCommonDto.FileActionRes.builder()
+                .targetIdx(null)
+                .action("cancel-all-share")
                 .affectedCount(affectedCount)
                 .build();
     }
@@ -343,6 +455,44 @@ public class ShareService {
                 share.getOwner() != null ? share.getOwner().getName() : null,
                 share.getOwner() != null ? share.getOwner().getEmail() : null,
                 share.getCreatedAt()
+        );
+    }
+
+    private ShareDto.SentSharedFileRes toSentSharedFileRes(List<FileShare> shares) {
+        FileShare firstShare = shares.get(0);
+        FileInfo file = firstShare.getFile();
+        List<ShareDto.ShareRecipientRes> recipients = shares.stream()
+                .map(share -> new ShareDto.ShareRecipientRes(
+                        share.getRecipient() != null ? share.getRecipient().getName() : null,
+                        share.getRecipient() != null ? share.getRecipient().getEmail() : null,
+                        share.getCreatedAt()
+                ))
+                .toList();
+
+        return new ShareDto.SentSharedFileRes(
+                file.getIdx(),
+                file.getFileOriginName(),
+                file.getFileSaveName(),
+                file.getFileSavePath(),
+                file.getFileFormat(),
+                file.getFileSize(),
+                resolveNodeType(file).name(),
+                file.getParent() != null ? file.getParent().getIdx() : null,
+                file.isLockedFile(),
+                file.isSharedFile(),
+                file.isTrashed(),
+                file.getDeletedAt(),
+                file.getUploadDate(),
+                file.getLastModifyDate(),
+                generatePresignedDownloadUrl(file),
+                generatePresignedThumbnailUrl(file),
+                minioProperties.getPresignedUrlExpirySeconds(),
+                false,
+                firstShare.getOwner() != null ? firstShare.getOwner().getName() : null,
+                firstShare.getOwner() != null ? firstShare.getOwner().getEmail() : null,
+                firstShare.getCreatedAt(),
+                recipients.size(),
+                recipients
         );
     }
 
