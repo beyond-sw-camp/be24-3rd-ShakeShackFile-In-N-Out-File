@@ -71,6 +71,10 @@ public class PostService {
 
             pr.save(result);
             upr.save(new UserPostDto.ReqUserPost(null, null).toEntity(result, user));
+
+            // 생성 직후에도 동일한 방식으로 SSE 타이틀 전파
+            List<Long> user_list = upr.findUserIdsByPostIdx(result.getIdx());
+            sseService.sendTitleUpdate(result.getIdx(), result.getTitle(), user_list);
         }
 
         AccessRole accessRole = upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx())
@@ -181,7 +185,9 @@ public class PostService {
             User invitedUser = ur.findByEmail(email)
                     .orElseThrow(() -> new BaseException(USER_NOT_REGISTERED));
 
-            evr.save(new EmailVerify(uuid, email));
+            if(!evr.findByToken(uuid).isPresent()) {
+                evr.save(new EmailVerify(uuid, email));
+            }
             evs.sendVerificationEmail(email, invitedUser.getName(), uuid);
             return SUCCESS;
         }
@@ -194,7 +200,9 @@ public class PostService {
                 upr.findByUser_IdxAndWorkspace_Idx(checkUser.getIdx(), post.getIdx());
 
         if(email != null) {
-            evr.save(new EmailVerify(uuid, email));
+            if(!evr.findByToken(uuid).isPresent()) {
+                evr.save(new EmailVerify(uuid, email));
+            }
             evs.sendVerificationEmail(email, checkUser.getName(), uuid);
         }
 
@@ -220,17 +228,17 @@ public class PostService {
                 .orElseThrow(() -> new BaseException(EMAIL_VERIFY_TOKEN_INVALID));
 
         if (!verificationToken.getEmail().equals(user.getEmail())) {
-            throw new BaseException(WORKSPACE_ACCESS_DENIED);
+            return WORKSPACE_ACCESS_DENIED;
         }
 
         if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             evr.delete(verificationToken);
-            throw new BaseException(EMAIL_VERIFY_TOKEN_EXPIRED);
+            return EMAIL_VERIFY_TOKEN_EXPIRED;
         }
 
         if (type.equals("reject")) {
             evr.delete(verificationToken);
-            throw new BaseException(INVITE_REJECTED);
+            return INVITE_REJECTED; // 또는 기존 정의된 FAIL 등
         }
 
         Post result = pr.findByUUID(uuid)
@@ -238,7 +246,7 @@ public class PostService {
 
         if (upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx()).isPresent()) {
             evr.delete(verificationToken);
-            throw new BaseException(ALREADY_JOINED);
+            return ALREADY_JOINED;
         }
 
         evr.delete(verificationToken);
@@ -344,7 +352,9 @@ public class PostService {
             User targetUser = ur.findById(targetUserId)
                     .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
 
-            evr.save(new EmailVerify(workspace.getUUID(), targetUser.getEmail()));
+            if(!evr.findByToken(workspace.getUUID()).isPresent()) {
+                evr.save(new EmailVerify(workspace.getUUID(), targetUser.getEmail()));
+            }
             ns.sendWorkspaceInviteNotification(targetUser.getIdx(), workspace.getUUID(), workspace.getTitle());
             affectedCount += 1;
         }

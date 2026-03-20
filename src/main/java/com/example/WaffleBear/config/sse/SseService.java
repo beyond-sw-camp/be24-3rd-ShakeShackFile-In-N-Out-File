@@ -8,12 +8,11 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 public class SseService {
-    private final Map<Long, SseEmitter> emitters;
+    private final SseEmitterStore emitterStore;
 
     public void sendTitleUpdate(Long postId, String newTitle, List<Long> userIds) {
         Map<String, Object> data = new HashMap<>();
@@ -21,7 +20,7 @@ public class SseService {
         data.put("title", newTitle);
 
         for (Long userId : userIds) {
-            SseEmitter emitter = emitters.get(userId);
+            SseEmitter emitter = emitterStore.get(userId);
             if (emitter != null) {
                 try {
                     // 이벤트 이름을 프론트엔드 addEventListener와 일치시킴
@@ -29,7 +28,7 @@ public class SseService {
                             .name("title-updated")
                             .data(data));
                 } catch (IOException e) {
-                    emitters.remove(userId);
+                    emitterStore.remove(userId);
                 }
             }
         }
