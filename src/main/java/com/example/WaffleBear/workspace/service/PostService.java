@@ -2,6 +2,7 @@ package com.example.WaffleBear.workspace.service;
 
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
+import com.example.WaffleBear.config.sse.SseService;
 import com.example.WaffleBear.email.EmailVerify;
 import com.example.WaffleBear.email.EmailVerifyRepository;
 import com.example.WaffleBear.email.EmailVerifyService;
@@ -9,7 +10,7 @@ import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
-import com.example.WaffleBear.workspace.asset.WorkspaceAssetService;
+//import com.example.WaffleBear.workspace.asset.WorkspaceAssetService;
 import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.workspace.model.post.isShare;
@@ -37,13 +38,14 @@ import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 @RequiredArgsConstructor
 public class PostService {
 
+    private final SseService sseService;
     private final EmailVerifyRepository evr;
     private final EmailVerifyService evs;
     private final UserRepository ur;
     private final PostRepository pr;
     private final UserPostRepository upr;
     private final NotificationService ns;
-    private final WorkspaceAssetService workspaceAssetService;
+//    private final WorkspaceAssetService workspaceAssetService;
 
     // ─────────────────────────────────────────────────────────────────────────
     // 저장 / 수정
@@ -58,6 +60,10 @@ public class PostService {
                     .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
             result.update(dto.title(), dto.contents());
             pr.save(result);
+            List<Long> user_list = upr.findUserIdsByPostIdx(result.getIdx());
+
+            // 3. SSE를 통해 참여자들에게 실시간 알림 전송
+            sseService.sendTitleUpdate(result.getIdx(), result.getTitle(), user_list);
         } else {
             result = new Post();
             result.update(dto.title(), dto.contents());
@@ -65,6 +71,10 @@ public class PostService {
 
             pr.save(result);
             upr.save(new UserPostDto.ReqUserPost(null, null).toEntity(result, user));
+
+            // 생성 직후에도 동일한 방식으로 SSE 타이틀 전파
+            List<Long> user_list = upr.findUserIdsByPostIdx(result.getIdx());
+            sseService.sendTitleUpdate(result.getIdx(), result.getTitle(), user_list);
         }
 
         AccessRole accessRole = upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx())
@@ -131,7 +141,7 @@ public class PostService {
                 .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
 
         if (result.getLevel().equals(AccessRole.ADMIN)) {
-            workspaceAssetService.deleteAllWorkspaceAssets(result.getWorkspace());
+//            workspaceAssetService.deleteAllWorkspaceAssets(result.getWorkspace());
             pr.delete(result.getWorkspace());
             return SUCCESS;
         }
@@ -175,7 +185,9 @@ public class PostService {
             User invitedUser = ur.findByEmail(email)
                     .orElseThrow(() -> new BaseException(USER_NOT_REGISTERED));
 
-            evr.save(new EmailVerify(uuid, email));
+            if(!evr.findByToken(uuid).isPresent()) {
+                evr.save(new EmailVerify(uuid, email));
+            }
             evs.sendVerificationEmail(email, invitedUser.getName(), uuid);
             return SUCCESS;
         }
@@ -188,7 +200,9 @@ public class PostService {
                 upr.findByUser_IdxAndWorkspace_Idx(checkUser.getIdx(), post.getIdx());
 
         if(email != null) {
-            evr.save(new EmailVerify(uuid, email));
+            if(!evr.findByToken(uuid).isPresent()) {
+                evr.save(new EmailVerify(uuid, email));
+            }
             evs.sendVerificationEmail(email, checkUser.getName(), uuid);
         }
 
@@ -214,17 +228,17 @@ public class PostService {
                 .orElseThrow(() -> new BaseException(EMAIL_VERIFY_TOKEN_INVALID));
 
         if (!verificationToken.getEmail().equals(user.getEmail())) {
-            throw new BaseException(WORKSPACE_ACCESS_DENIED);
+            return WORKSPACE_ACCESS_DENIED;
         }
 
         if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             evr.delete(verificationToken);
-            throw new BaseException(EMAIL_VERIFY_TOKEN_EXPIRED);
+            return EMAIL_VERIFY_TOKEN_EXPIRED;
         }
 
         if (type.equals("reject")) {
             evr.delete(verificationToken);
-            throw new BaseException(INVITE_REJECTED);
+            return INVITE_REJECTED; // 또는 기존 정의된 FAIL 등
         }
 
         Post result = pr.findByUUID(uuid)
@@ -232,7 +246,7 @@ public class PostService {
 
         if (upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx()).isPresent()) {
             evr.delete(verificationToken);
-            throw new BaseException(ALREADY_JOINED);
+            return ALREADY_JOINED;
         }
 
         evr.delete(verificationToken);
@@ -338,7 +352,9 @@ public class PostService {
             User targetUser = ur.findById(targetUserId)
                     .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
 
-            evr.save(new EmailVerify(workspace.getUUID(), targetUser.getEmail()));
+            if(!evr.findByToken(workspace.getUUID()).isPresent()) {
+                evr.save(new EmailVerify(workspace.getUUID(), targetUser.getEmail()));
+            }
             ns.sendWorkspaceInviteNotification(targetUser.getIdx(), workspace.getUUID(), workspace.getTitle());
             affectedCount += 1;
         }
