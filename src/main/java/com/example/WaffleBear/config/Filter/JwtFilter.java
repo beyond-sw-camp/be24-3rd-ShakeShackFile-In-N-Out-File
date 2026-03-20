@@ -46,15 +46,25 @@ public class JwtFilter extends OncePerRequestFilter {
         // 1. 헤더에서 Authorization 키를 찾음
         String authorization = request.getHeader("Authorization");
 
-        // 2. Authorization 헤더가 없거나 Bearer 접두사가 아니면 검증 종료 (다음 필터로)
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            System.out.println("DEBUG: Authorization 헤더가 없거나 형식이 틀림: " + authorization);
+        // 2. EventSource는 커스텀 헤더를 못 보내므로, token 쿼리 파라미터도 함께 지원
+        String token = null;
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            // "Bearer " 부분을 제거하고 순수 토큰 문자열만 추출
+            token = authorization.split(" ")[1];
+        } else {
+            // e.g. /api/sse/connect?token=xxxxx
+            String tokenParam = request.getParameter("token");
+            if (tokenParam != null && !tokenParam.isBlank()) {
+                token = tokenParam.startsWith("Bearer ") ? tokenParam.split(" ")[1] : tokenParam;
+            }
+        }
+
+        // 3. 토큰이 없으면 검증 종료 (다음 필터로)
+        if (token == null || token.isBlank()) {
+            System.out.println("DEBUG: Authorization 헤더/쿼리 token 모두 없음");
             filterChain.doFilter(request, response);
             return;
         }
-
-        // 3. "Bearer " 부분을 제거하고 순수 토큰 문자열만 추출
-        String token = authorization.split(" ")[1];
 
         // 4. 토큰 소멸 시간 검증
         try {
