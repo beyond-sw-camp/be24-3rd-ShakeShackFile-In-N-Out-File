@@ -32,7 +32,15 @@ public class NotificationController {
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestBody NotificationDto.Subscribe dto) {
         notificationService.subscribe(dto, user.getIdx());
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("구독 성공");
+    }
+
+    // 로그아웃 시 호출 → isActive = false
+    @PostMapping("/unsubscribe")
+    public ResponseEntity<?> unsubscribe(
+            @AuthenticationPrincipal AuthUserDetails user) {
+        notificationService.unsubscribe(user.getIdx());
+        return ResponseEntity.ok("구독 해지 성공");
     }
 
     @PostMapping("/send")
@@ -40,7 +48,7 @@ public class NotificationController {
             @RequestBody NotificationDto.Send dto
     ) throws JoseException, GeneralSecurityException, IOException, ExecutionException, InterruptedException {
         notificationService.send(dto);
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("전송 성공");
     }
 
     @GetMapping("/list")
@@ -58,7 +66,7 @@ public class NotificationController {
             @RequestBody NotificationDto.Target dto
     ) {
         notificationService.markAsRead(user.getIdx(), dto);
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("읽음 처리 성공");
     }
 
     @DeleteMapping
@@ -66,8 +74,7 @@ public class NotificationController {
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestBody NotificationDto.Target dto
     ) {
-        System.out.println(user.getIdx() + " " + dto);
         notificationService.deleteNotification(user.getIdx(), dto);
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("삭제 성공");
     }
 }
