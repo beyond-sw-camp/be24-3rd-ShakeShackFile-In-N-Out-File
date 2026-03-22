@@ -67,6 +67,7 @@ public class NotificationService {
                 .endpoint(existing.getEndpoint())
                 .p256dh(dto.keys() != null ? dto.keys().get("p256dh") : null)
                 .auth(dto.keys() != null ? dto.keys().get("auth") : null)
+                .isActive(true)
                 .build();
         notificationRepository.save(updated);
 
@@ -101,6 +102,13 @@ public class NotificationService {
 
         sseService.sendToUser(userIdx, "new-message", payload);
         sendPayloadToUser(userIdx, NotificationDto.Payload.create(title, message, roomIdx, unreadCount));
+    }
+
+    @Transactional
+    public void unsubscribe(Long userIdx) {
+        List<NotificationEntity> subscriptions = notificationRepository.findAllByUserIdx(userIdx);
+        subscriptions.forEach(NotificationEntity::deactivate);
+        notificationRepository.saveAll(subscriptions);
     }
 
     public void sendWorkspaceInviteNotification(Long receiverUserIdx, String uuid, String workspaceName) {
@@ -198,7 +206,7 @@ public class NotificationService {
     @Async
     private void sendPayloadToUser(Long receiverUserIdx, NotificationDto.Payload payload) {
         Map<String, NotificationEntity> uniqueSubscriptions = new LinkedHashMap<>();
-        notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity ->
+        notificationRepository.findByUserIdxAndIsActiveTrue(receiverUserIdx).forEach(entity ->
                 uniqueSubscriptions.putIfAbsent(entity.getEndpoint(), entity)
         );
 
