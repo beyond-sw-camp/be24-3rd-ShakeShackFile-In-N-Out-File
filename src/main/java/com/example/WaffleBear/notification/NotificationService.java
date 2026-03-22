@@ -10,7 +10,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jose4j.lang.JoseException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import com.example.WaffleBear.sse.SseService;
+import com.example.WaffleBear.config.sse.SseService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
