@@ -43,6 +43,4 @@ public class SseController {
         }
         return emitter;
     }
-//    @PostMapping(value = "/update")
-//    public void update()
 }

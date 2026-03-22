@@ -33,4 +33,21 @@ public class SseService {
             }
         }
     }
+    // 특정 유저에게 이벤트 전송
+    public void sendToUser(Long userId, String eventName, Object data) {
+        SseEmitter emitter = emitterStore.get(userId);
+        if (emitter == null) return;
+
+        try {
+            emitter.send(SseEmitter.event()
+                    .name(eventName)
+                    .data(data));
+        } catch (IOException e) {
+            emitterStore.remove(userId);
+            emitter.completeWithError(e);
+        }
+    }
+    public boolean isConnected(Long userId) {
+        return emitterStore.getEmitters().containsKey(userId);
+    }
 }

@@ -66,6 +66,7 @@ public class NotificationController {
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestBody NotificationDto.Target dto
     ) {
+        System.out.println(user.getIdx() + " " + dto);
         notificationService.deleteNotification(user.getIdx(), dto);
         return ResponseEntity.ok("?깃났");
     }
