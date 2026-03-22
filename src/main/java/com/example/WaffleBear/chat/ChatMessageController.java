@@ -79,4 +79,14 @@ public class ChatMessageController {
         String fileUrl = chatMessageService.uploadFile(roomIdx, file, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success(Map.of("fileUrl", fileUrl)));
     }
+
+    @DeleteMapping("/{roomIdx}/{messageIdx}")
+    public ResponseEntity<?> deleteMessage(
+            @PathVariable Long roomIdx,
+            @PathVariable Long messageIdx,
+            @AuthenticationPrincipal AuthUserDetails user) {
+
+        chatMessageService.deleteMessage(roomIdx, messageIdx, user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success("메시지 삭제 완료"));
+    }
 }
