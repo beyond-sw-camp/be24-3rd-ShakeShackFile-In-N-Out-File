@@ -20,17 +20,29 @@ public class SseService {
         data.put("title", newTitle);
 
         for (Long userId : userIds) {
-            SseEmitter emitter = emitterStore.get(userId);
-            if (emitter != null) {
-                try {
-                    // 이벤트 이름을 프론트엔드 addEventListener와 일치시킴
-                    emitter.send(SseEmitter.event()
-                            .name("title-updated")
-                            .data(data));
-                } catch (IOException e) {
-                    emitterStore.remove(userId);
-                }
-            }
+            sendEventToUser(userId, "title-updated", data);  // ✅ 통일
+        }
+    }
+
+    public void sendRoleChanged(Long targetUserIdx, Long postIdx, String newRole) {
+        Map<String, Object> payload = Map.of(
+                "postIdx", postIdx,
+                "newRole", newRole
+        );
+        sendEventToUser(targetUserIdx, "role-changed", payload);
+    }
+
+    // ✅ 공통 전송 헬퍼
+    private void sendEventToUser(Long userId, String eventName, Object data) {
+        SseEmitter emitter = emitterStore.get(userId);
+        if (emitter == null) return;
+
+        try {
+            emitter.send(SseEmitter.event()
+                    .name(eventName)
+                    .data(data));
+        } catch (IOException e) {
+            emitterStore.remove(userId);
         }
     }
 }
