@@ -13,13 +13,8 @@ import com.example.WaffleBear.workspace.service.PostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
 import static com.example.WaffleBear.common.model.BaseResponseStatus.*;
 
 import java.util.List;
@@ -151,7 +146,7 @@ public class PostController {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 권한 조회
+    // 권한 조회 / 권한 변경 및 추방
     // ─────────────────────────────────────────────────────────────────────────
 
     @GetMapping("/loadRole/{idx}")
@@ -160,6 +155,31 @@ public class PostController {
             @PathVariable("idx") Long postIdx) {
 
         List<UserPostDto.ResRole> result = ps.loadRole(postIdx, user.getIdx());
+        return BaseResponse.success(ResponseEntity.ok(result));
+    }
+
+
+    // ─── 단일 유저 역할 변경 ────────────────────────────────────────────────────
+    @PostMapping("/{postIdx}/role/{targetUserIdx}")
+    public BaseResponse changeSingleRole(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long postIdx,
+            @PathVariable Long targetUserIdx,
+            @RequestBody Map<String, String> body) {
+
+        String role = body.get("role");
+        BaseResponseStatus result = ps.changeSingleRole(postIdx, user, targetUserIdx, role);
+        return BaseResponse.success(ResponseEntity.ok(result));
+    }
+
+    // ─── 유저 추방 ──────────────────────────────────────────────────────────────
+    @DeleteMapping("/{postIdx}/member/{targetUserIdx}")
+    public BaseResponse kickMember(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long postIdx,
+            @PathVariable Long targetUserIdx) {
+
+        BaseResponseStatus result = ps.kickMember(postIdx, user, targetUserIdx);
         return BaseResponse.success(ResponseEntity.ok(result));
     }
 

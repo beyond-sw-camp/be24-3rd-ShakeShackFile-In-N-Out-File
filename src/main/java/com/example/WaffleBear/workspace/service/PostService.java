@@ -11,6 +11,7 @@ import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
 //import com.example.WaffleBear.workspace.asset.WorkspaceAssetService;
+import com.example.WaffleBear.workspace.asset.WorkspaceAssetService;
 import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.workspace.model.post.isShare;
@@ -45,7 +46,7 @@ public class PostService {
     private final PostRepository pr;
     private final UserPostRepository upr;
     private final NotificationService ns;
-//    private final WorkspaceAssetService workspaceAssetService;
+    private final WorkspaceAssetService workspaceAssetService;
 
     // ─────────────────────────────────────────────────────────────────────────
     // 저장 / 수정
@@ -122,7 +123,7 @@ public class PostService {
             UserPost relation = upr.save(UserPost.builder()
                     .user(user)
                     .workspace(workspace)
-                    .Level(AccessRole.READ)
+                    .Level(AccessRole.WRITE)
                     .build());
 
             return PostDto.ResUuidLookup.from(workspace, relation.getLevel());
@@ -141,8 +142,9 @@ public class PostService {
                 .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
 
         if (result.getLevel().equals(AccessRole.ADMIN)) {
-//            workspaceAssetService.deleteAllWorkspaceAssets(result.getWorkspace());
-            pr.delete(result.getWorkspace());
+            Post workspace = result.getWorkspace();
+            workspaceAssetService.deleteAllWorkspaceAssets(workspace);
+            pr.delete(workspace);
             return SUCCESS;
         }
 
@@ -255,7 +257,7 @@ public class PostService {
             upr.save(UserPost.builder()
                     .user(user)
                     .workspace(result)
-                    .Level(AccessRole.READ)
+                    .Level(AccessRole.WRITE)
                     .build());
             return SUCCESS;
         }
@@ -278,7 +280,7 @@ public class PostService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 권한 조회
+    // 권한 조회 및 권한 변경, 유저 추방
     // ─────────────────────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
@@ -293,6 +295,49 @@ public class PostService {
         List<UserPost> load = upr.findAllByWorkspace_idx(postIdx);
         return load.stream().map(UserPostDto.ResRole::from).toList();
     }
+
+    @Transactional
+    public BaseResponseStatus changeSingleRole(Long postIdx, AuthUserDetails admin, Long targetUserIdx, String newRole) {
+        // 1. 어드민 권한 확인
+        UserPost adminPost = upr.findByUser_IdxAndWorkspace_Idx(admin.getIdx(), postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
+        if (!adminPost.getLevel().equals(AccessRole.ADMIN)) {
+            throw new BaseException(ADMIN_ONLY_ACTION);
+        }
+
+        // 2. 대상 유저 역할 변경
+        UserPost targetPost = upr.findByUser_IdxAndWorkspace_Idx(targetUserIdx, postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
+        targetPost.updateLevel(AccessRole.valueOf(newRole));
+
+        // 3. SSE로 해당 유저에게 알림 (본인이 같은 페이지에 있으면 새로고침)
+        sseService.sendRoleChanged(targetUserIdx, postIdx, newRole);
+
+        return SUCCESS;
+    }
+
+    @Transactional
+    public BaseResponseStatus kickMember(Long postIdx, AuthUserDetails admin, Long targetUserIdx) {
+        // 1. 어드민 권한 확인
+        UserPost adminPost = upr.findByUser_IdxAndWorkspace_Idx(admin.getIdx(), postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
+        if (!adminPost.getLevel().equals(AccessRole.ADMIN)) {
+            throw new BaseException(ADMIN_ONLY_ACTION);
+        }
+
+        // 2. 관계 삭제
+        upr.deleteByUser_IdxAndWorkspace_Idx(targetUserIdx, postIdx)
+                .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
+
+        // 3. SSE로 해당 유저에게 추방 알림
+        sseService.sendRoleChanged(targetUserIdx, postIdx, "KICKED");
+
+        return SUCCESS;
+    }
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // 권한 저장

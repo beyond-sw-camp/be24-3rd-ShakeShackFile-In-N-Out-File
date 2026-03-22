@@ -32,7 +32,7 @@ public class NotificationController {
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestBody NotificationDto.Subscribe dto) {
         notificationService.subscribe(dto, user.getIdx());
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("성공");
     }
 
     @PostMapping("/send")
@@ -40,7 +40,7 @@ public class NotificationController {
             @RequestBody NotificationDto.Send dto
     ) throws JoseException, GeneralSecurityException, IOException, ExecutionException, InterruptedException {
         notificationService.send(dto);
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("성공");
     }
 
     @GetMapping("/list")
@@ -58,7 +58,7 @@ public class NotificationController {
             @RequestBody NotificationDto.Target dto
     ) {
         notificationService.markAsRead(user.getIdx(), dto);
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("성공");
     }
 
     @DeleteMapping
@@ -67,6 +67,6 @@ public class NotificationController {
             @RequestBody NotificationDto.Target dto
     ) {
         notificationService.deleteNotification(user.getIdx(), dto);
-        return ResponseEntity.ok("?깃났");
+        return ResponseEntity.ok("성공");
     }
 }
