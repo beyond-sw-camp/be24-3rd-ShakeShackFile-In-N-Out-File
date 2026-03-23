@@ -31,7 +31,6 @@ public class SseService {
         );
         sendEventToUser(targetUserIdx, "role-changed", payload);
     }
-
     // ✅ 공통 전송 헬퍼
     private void sendEventToUser(Long userId, String eventName, Object data) {
         SseEmitter emitter = emitterStore.get(userId);
@@ -43,6 +42,10 @@ public class SseService {
                     .data(data));
         } catch (IOException e) {
             emitterStore.remove(userId);
+            emitter.completeWithError(e);
         }
+    }
+    public boolean isConnected(Long userId) {
+        return emitterStore.getEmitters().containsKey(userId);
     }
 }

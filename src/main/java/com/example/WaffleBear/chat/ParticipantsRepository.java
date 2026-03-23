@@ -27,6 +27,7 @@ public interface ParticipantsRepository extends JpaRepository<ChatParticipants,L
     List<ChatParticipants> findAllByUsersIdx(Long userIdx);
     Optional<ChatParticipants> findByChatRoomsIdxAndUsersIdx(Long roomIdx, Long userIdx);
 
+    @Query("select cp from ChatParticipants cp join fetch cp.users u where cp.chatRooms.idx = :roomIdx")
     List<ChatParticipants> findAllByChatRoomsIdx(Long roomIdx);
     //복구
 }

@@ -41,4 +41,6 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
     Optional<ChatMessages> findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(
             Long chatRoomsIdx, LocalDateTime after
     );
+
+    Optional<ChatMessages> findByIdxAndChatRoomsIdx(Long messageIdx, Long roomIdx);
 }
