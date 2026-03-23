@@ -3,6 +3,7 @@ package com.example.WaffleBear.email;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -13,7 +14,13 @@ import org.springframework.stereotype.Service;
 public class EmailVerifyService {
     private final JavaMailSender mailSender;
 
-    @Async // 메일 발송은 시간이 걸리므로 비동기 처리를 권장합니다.
+    @Value("${app.backend-url}")
+    private String backendUrl;
+
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
+    @Async
     public void sendVerificationEmail(String email, String token) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -22,8 +29,7 @@ public class EmailVerifyService {
             helper.setTo(email);
             helper.setSubject("[WaffleBear] 회원가입 이메일 인증");
 
-            // 실제 서비스 시에는 localhost 대신 실제 도메인을 넣어야 합니다.
-            String verificationLink = "http://localhost:8080/user/verify?token=" + token;
+            String verificationLink = backendUrl + "/user/verify?token=" + token;
 
             String htmlContent = String.format(
                     "<h1>WaffleBear 회원가입을 축하합니다.</h1>" +
@@ -35,10 +41,10 @@ public class EmailVerifyService {
             helper.setText(htmlContent, true);
             mailSender.send(message);
         } catch (MessagingException e) {
-            // 로깅 후 예외 처리 전략 필요 (냉정하게 분석하자면, 실패 시 재시도 로직이나 DB 마킹이 수반되어야 함)
             throw new RuntimeException("이메일 발송 실패", e);
         }
     }
+
     @Async
     public void sendVerificationEmail(String email, String username, String uuid) {
         try {
@@ -46,19 +52,18 @@ public class EmailVerifyService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setTo(email);
-            helper.setSubject("[WaffleBear] " + username + "님께서 워크스페이스에 초대하셨습니다.");
+            helper.setSubject("[WaffleBear] " + username + "님이 워크스페이스로 초대했습니다.");
 
-            // 베이스 URL 설정
-            String baseUrl = "http://localhost:5173/workspace/verify?uuid=" + uuid;
-            String acceptLink = baseUrl + "&type=accept"; // 쿼리 파라미터 방식 권장
+            String baseUrl = frontendUrl + "/workspace/verify?uuid=" + uuid;
+            String acceptLink = baseUrl + "&type=accept";
             String rejectLink = baseUrl + "&type=reject";
 
             String htmlContent = String.format(
                     "<div style='font-family: \"Apple SD Gothic Neo\", sans-serif; max-width: 500px; margin: 0 auto; padding: 40px; border: 1px solid #f0f0f0; border-radius: 16px; text-align: center; color: #333;'>" +
-                            "  <div style='font-size: 40px; margin-bottom: 20px;'>🧇</div>" +
+                            "  <div style='font-size: 40px; margin-bottom: 20px;'>📩</div>" +
                             "  <h1 style='font-size: 24px; font-weight: 700; margin-bottom: 10px;'>워크스페이스 초대</h1>" +
                             "  <p style='font-size: 16px; line-height: 1.6; color: #666; margin-bottom: 30px;'>" +
-                            "    <strong>%s</strong>님께서 당신을<br>WaffleBear 워크스페이스로 초대하셨습니다." +
+                            "    <strong>%s</strong>님이 당신을<br>WaffleBear 워크스페이스로 초대했습니다." +
                             "  </p>" +
                             "  <div style='display: flex; justify-content: center; gap: 10px;'>" +
                             "    <a href='%s' style='display: inline-block; background-color: #3B82F6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);'>초대 수락하기</a>" +

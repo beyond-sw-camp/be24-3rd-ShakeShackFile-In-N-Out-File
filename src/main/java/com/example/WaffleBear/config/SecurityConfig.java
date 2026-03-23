@@ -7,6 +7,7 @@ import com.example.WaffleBear.config.oauth2.OAuth2AuthenticationSuccessHandler;
 import com.example.WaffleBear.config.oauth2.OAuth2AuthorizationRequestRepository;
 import com.example.WaffleBear.user.service.OAuth2UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -26,6 +27,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @EnableWebSecurity // Security 설정을 활성화
 public class SecurityConfig {
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
+
     private final AuthenticationConfiguration configuration;
     private final LoginFilter loginFilter;
     private final JwtFilter jwtFilter;
@@ -69,6 +73,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowCredentials(true);
         configuration.setAllowedOriginPatterns(List.of(
+                frontendUrl,
                 "http://localhost:*",
                 "http://127.0.0.1:*",
                 "http://192.168.*:*",

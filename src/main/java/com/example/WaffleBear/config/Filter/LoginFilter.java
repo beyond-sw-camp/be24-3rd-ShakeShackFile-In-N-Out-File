@@ -1,7 +1,7 @@
 package com.example.WaffleBear.config.Filter;
 
-import com.example.WaffleBear.user.model.TokenDto;
 import com.example.WaffleBear.user.model.AuthUserDetails;
+import com.example.WaffleBear.user.model.TokenDto;
 import com.example.WaffleBear.user.model.UserDto;
 import com.example.WaffleBear.user.service.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +10,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,20 +21,21 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.Map;
 
-
-
 @Component
 public class LoginFilter extends UsernamePasswordAuthenticationFilter {
     private final AuthenticationManager authenticationManager;
     private final AuthService authService;
+    private final boolean secureCookie;
 
     public LoginFilter(
             AuthenticationManager authenticationManager,
-            AuthService authService) {
+            AuthService authService,
+            @Value("${app.secure-cookie}") boolean secureCookie) {
 
         super(authenticationManager);
         this.authenticationManager = authenticationManager;
         this.authService = authService;
+        this.secureCookie = secureCookie;
     }
 
     @Override
@@ -45,7 +47,6 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
 
         AuthUserDetails user = (AuthUserDetails) authResult.getPrincipal();
 
-        // 1. 서비스 계층에 비즈니스 로직 위임
         TokenDto.AuthTokenResponse tokens = authService.issueTokens(
                 user.getIdx(),
                 user.getId(),
@@ -54,15 +55,13 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
                 user.getRole()
         );
 
-        // 2. HTTP 응답 제어 (Access Token -> Header)
         response.setHeader("Authorization", "Bearer " + tokens.accessToken());
 
-        // 3. HTTP 응답 제어 (Refresh Token -> HttpOnly Cookie)
         Cookie refreshCookie = new Cookie("refresh", tokens.refreshToken());
         refreshCookie.setMaxAge(14 * 24 * 60 * 60);
         refreshCookie.setHttpOnly(true);
         refreshCookie.setPath("/");
-        // refreshCookie.setSecure(true); // 운영 환경(HTTPS)에서는 필수 활성화
+        refreshCookie.setSecure(secureCookie);
         response.addCookie(refreshCookie);
 
         response.setContentType("application/json;charset=UTF-8");
@@ -82,30 +81,25 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         response.getWriter().write("로그인 실패");
     }
 
-    // TODO : 1번
     @Override
     public Authentication attemptAuthentication(
             HttpServletRequest request,
             HttpServletResponse response) throws AuthenticationException {
-
-        System.out.println("필터 실행됌.");
 
         try {
             UserDto.LoginReq dto = new ObjectMapper().readValue(
                     request.getInputStream(),
                     UserDto.LoginReq.class);
 
-            // TODO : 2번
             UsernamePasswordAuthenticationToken token =
                     new UsernamePasswordAuthenticationToken(
                             dto.email(),
                             dto.password(),
                             null);
-            // TODO : 3번
+
             return authenticationManager.authenticate(token);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-
 }
