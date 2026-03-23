@@ -37,4 +37,6 @@ out/
 ### VS Code ###
 .vscode/
 .env
+
+keystore.p12
 keystore.p12
