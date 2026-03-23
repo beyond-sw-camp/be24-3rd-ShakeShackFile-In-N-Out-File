@@ -57,6 +57,114 @@ public class WorkspaceAssetService {
     private final MinioProperties minioProperties;
     private final SimpMessagingTemplate messagingTemplate;
 
+    /**
+     * 여러 파일을 한번에 업로드 (일반 에셋용)
+     */
+    @Transactional
+    public List<WorkspaceAssetDto.AssetRes> uploadWorkspaceAssets(
+            Long userIdx,
+            Long workspaceIdx,
+            MultipartFile[] files) {
+
+        WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, true);
+
+        if (files == null || files.length == 0) {
+            throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
+        }
+
+        Post workspace = permission.workspace();
+
+        // ✅ User 엔티티 제대로 로드
+        User uploader = userRepository.findById(userIdx)
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.USER_NOT_FOUND));
+
+        List<WorkspaceAsset> savedAssets = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) continue;
+
+            validateFile(file);
+
+            // 용량 및 타입 체크
+            String contentType = file.getContentType();
+            String originalName = file.getOriginalFilename();
+            String extension = extractExtension(originalName == null ? "" : originalName);
+
+            // ❌ 이미지 파일 거부
+            boolean isImage = isImageFile(contentType, extension);
+            if (isImage) {
+                throw new IllegalArgumentException(
+                        "이미지 파일은 업로드할 수 없습니다.\n" +
+                                "파일: " + originalName + "\n" +
+                                "이미지는 에디터 이미지 업로드를 사용해주세요."
+                );
+            }
+
+            // ✅ 일반 파일 크기 체크 (30MB)
+            if (file.getSize() > MAX_FILE_SIZE) {
+                throw new IllegalArgumentException(
+                        "파일은 30MB 이하만 업로드 가능합니다.\n" +
+                                "파일: " + originalName + "\n" +
+                                "크기: " + (file.getSize() / 1024 / 1024) + "MB"
+                );
+            }
+
+            // Minio 업로드
+            String objectKey = "file/" + workspace.getUUID() + "/"
+                    + System.currentTimeMillis() + "_" + originalName;
+
+            try {
+                minioClient.putObject(
+                        PutObjectArgs.builder()
+                                .bucket(minioProperties.getBucket_cloud())
+                                .object(objectKey)
+                                .stream(file.getInputStream(), file.getSize(), -1)
+                                .contentType(contentType != null ? contentType : "application/octet-stream")
+                                .build()
+                );
+            } catch (Exception e) {
+                throw new RuntimeException("파일 업로드 실패: " + e.getMessage());
+            }
+
+            // ✅ DB 저장 (User를 제대로 로드해서 저장)
+            String storedFileName = objectKey.substring(objectKey.lastIndexOf('/') + 1);
+            WorkspaceAssetType assetType = WorkspaceAssetType.FILE;
+
+            try {
+                WorkspaceAsset saved = workspaceAssetRepository.save(
+                        WorkspaceAsset.builder()
+                                .workspace(workspace)
+                                .uploader(uploader)  // ✅ 제대로 로드된 User 객체
+                                .assetType(assetType)
+                                .originalName(originalName)
+                                .storedFileName(storedFileName)
+                                .objectFolder("file/" + workspace.getUUID())
+                                .objectKey(objectKey)
+                                .contentType(contentType != null ? contentType : "application/octet-stream")
+                                .fileSize(file.getSize())
+                                .build()
+                );
+
+                savedAssets.add(saved);
+
+                System.out.println("✅ DB 저장 성공: " + saved.getIdx() + " - " + originalName);
+            } catch (Exception e) {
+                System.err.println("❌ DB 저장 실패: " + e.getMessage());
+                e.printStackTrace();
+                // 일단 로깅만 하고 다음 파일 처리
+                throw new RuntimeException("파일 DB 저장 실패: " + originalName + " - " + e.getMessage());
+            }
+        }
+
+        List<WorkspaceAssetDto.AssetRes> result = savedAssets.stream()
+                .map(this::toAssetRes)
+                .toList();
+
+        publishAssetEvent(workspaceIdx, "UPLOAD", userIdx, result, null);
+
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public List<WorkspaceAssetDto.AssetRes> listAssets(Long userIdx, Long workspaceIdx) {
         WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, false);
@@ -68,7 +176,7 @@ public class WorkspaceAssetService {
     }
 
     @Transactional
-    public EditorJsUploadResult uploadAssets(Long userIdx, Long workspaceIdx, MultipartFile image) {
+    public EditorJsUploadResult uploadAssetsEditorJs(Long userIdx, Long workspaceIdx, MultipartFile image) {
         WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, true);
         if (image == null || image.isEmpty()) {
             throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
@@ -165,6 +273,34 @@ public class WorkspaceAssetService {
         // ✅ DB에서도 삭제
         workspaceAssetRepository.delete(asset);
     }
+    /**
+     * 일반 에셋 삭제
+     */
+    @Transactional
+    public void deleteWorkspaceAsset(Long userIdx, Long workspaceIdx, Long assetId) {
+        WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, true);
+
+        WorkspaceAsset asset = workspaceAssetRepository
+                .findByIdxAndWorkspace_Idx(assetId, permission.workspace().getIdx())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
+
+        // Minio에서 삭제
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(asset.getObjectKey())
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("파일 삭제 실패: " + e.getMessage());
+        }
+
+        // DB에서 삭제
+        workspaceAssetRepository.delete(asset);
+
+        publishAssetEvent(workspaceIdx, "DELETE", userIdx, null, List.of(assetId));
+    }
 
     @Transactional
     public FileCommonDto.FileListItemRes saveAssetToDrive(Long userIdx, Long workspaceIdx, Long assetIdx, Long parentId) {
@@ -174,7 +310,6 @@ public class WorkspaceAssetService {
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
 
         FileInfo parentFolder  = resolveParentFolder(userIdx, parentId);
-        String sourceBucket    = resolveWorkspaceBucketName();   // bucket_work
         String targetBucket    = resolveDriveBucketName();       // bucket_cloud
         String fileFormat      = resolveDriveFileFormat(asset);
         String savedFileName   = buildDriveStoredFileName(fileFormat);
@@ -186,7 +321,7 @@ public class WorkspaceAssetService {
                             .bucket(targetBucket)
                             .object(savedObjectKey)
                             .source(CopySource.builder()
-                                    .bucket(sourceBucket)
+                                    .bucket(minioProperties.getBucket_cloud())
                                     .object(asset.getObjectKey())
                                     .build())
                             .build()
@@ -347,6 +482,26 @@ public class WorkspaceAssetService {
                 asset.getCreatedAt()
         );
     }
+    /**
+     * 이미지 파일 여부 판단
+     */
+    private boolean isImageFile(String contentType, String extension) {
+        // ContentType으로 확인
+        if (contentType != null) {
+            String lowerContentType = contentType.toLowerCase(Locale.ROOT);
+            if (lowerContentType.startsWith("image/")) {
+                return true;
+            }
+        }
+
+        // 확장자로 확인
+        if (extension != null && !extension.isBlank()) {
+            String lowerExtension = extension.toLowerCase(Locale.ROOT);
+            return IMAGE_EXTENSIONS.contains(lowerExtension);
+        }
+
+        return false;
+    }
 
     private String generatePresignedGetUrl(String objectKey) {
         if (objectKey == null || objectKey.isBlank()) {
@@ -357,7 +512,7 @@ public class WorkspaceAssetService {
             return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
-                            .bucket(resolveWorkspaceBucketName())
+                            .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
                             .expiry(minioProperties.getPresignedUrlExpirySeconds())
                             .build()
@@ -385,7 +540,7 @@ public class WorkspaceAssetService {
         try {
             Iterable<Result<io.minio.messages.DeleteError>> results = minioClient.removeObjects(
                     RemoveObjectsArgs.builder()
-                            .bucket(resolveWorkspaceBucketName())
+                            .bucket(minioProperties.getBucket_cloud())
                             .objects(deleteTargets)
                             .build()
             );
