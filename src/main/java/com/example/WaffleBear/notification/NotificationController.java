@@ -1,0 +1,80 @@
+package com.example.WaffleBear.notification;
+
+import com.example.WaffleBear.notification.model.NotificationDto;
+import com.example.WaffleBear.user.model.AuthUserDetails;
+import lombok.RequiredArgsConstructor;
+import org.jose4j.lang.JoseException;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/notification")
+public class NotificationController {
+
+    private final NotificationService notificationService;
+
+    @PostMapping("/subscribe")
+    public ResponseEntity<?> subscribe(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody NotificationDto.Subscribe dto) {
+        notificationService.subscribe(dto, user.getIdx());
+        return ResponseEntity.ok("구독 성공");
+    }
+
+    // 로그아웃 시 호출 → isActive = false
+    @PostMapping("/unsubscribe")
+    public ResponseEntity<?> unsubscribe(
+            @AuthenticationPrincipal AuthUserDetails user) {
+        notificationService.unsubscribe(user.getIdx());
+        return ResponseEntity.ok("구독 해지 성공");
+    }
+
+    @PostMapping("/send")
+    public ResponseEntity<?> send(
+            @RequestBody NotificationDto.Send dto
+    ) throws JoseException, GeneralSecurityException, IOException, ExecutionException, InterruptedException {
+        notificationService.send(dto);
+        return ResponseEntity.ok("전송 성공");
+    }
+
+    @GetMapping("/list")
+    public ResponseEntity<?> list(@AuthenticationPrincipal AuthUserDetails user) {
+        List<NotificationDto.InboxItem> items =
+                notificationService.getInboxNotifications(user.getIdx());
+        return ResponseEntity.ok(
+                Map.of("result", Map.of("body", items))
+        );
+    }
+
+    @PatchMapping("/read")
+    public ResponseEntity<?> read(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody NotificationDto.Target dto
+    ) {
+        notificationService.markAsRead(user.getIdx(), dto);
+        return ResponseEntity.ok("읽음 처리 성공");
+    }
+
+    @DeleteMapping
+    public ResponseEntity<?> delete(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @RequestBody NotificationDto.Target dto
+    ) {
+        notificationService.deleteNotification(user.getIdx(), dto);
+        return ResponseEntity.ok("삭제 성공");
+    }
+}
