@@ -5,9 +5,13 @@ import com.example.WaffleBear.user.model.UserDto;
 import com.example.WaffleBear.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"}, allowCredentials = "true")
 @RequestMapping("/user")
 @RestController
 @RequiredArgsConstructor
@@ -15,9 +19,8 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/signup")
-    public ResponseEntity signup(@RequestBody UserDto.SignupReq dto){
+    public ResponseEntity<?> signup(@RequestBody UserDto.SignupReq dto) {
         UserDto.SignupRes result = userService.signup(dto);
-
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/administrator")
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdministratorController {
 
     private final AdministratorService administratorService;
+    private final StorageAnalyticsService storageAnalyticsService;
 
     @GetMapping("/dashboard")
     public ResponseEntity<?> getDashboard(@AuthenticationPrincipal AuthUserDetails userDetails) {
@@ -33,6 +35,27 @@ public class AdministratorController {
             @RequestBody AdministratorDto.StatusUpdateReq request
     ) {
         AdministratorDto.UserRes result = administratorService.updateUserStatus(userDetails, userIdx, request);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @GetMapping("/storage-analytics")
+    public ResponseEntity<?> getStorageAnalytics(
+            @AuthenticationPrincipal AuthUserDetails userDetails,
+            @RequestParam(value = "range", required = false) String rangeCode
+    ) {
+        AdministratorDto.StorageAnalyticsRes result =
+                storageAnalyticsService.getStorageAnalytics(userDetails, rangeCode);
+        return ResponseEntity.ok(BaseResponse.success(result));
+    }
+
+    @PatchMapping("/storage-capacity")
+    public ResponseEntity<?> updateStorageCapacity(
+            @AuthenticationPrincipal AuthUserDetails userDetails,
+            @RequestParam(value = "range", required = false) String rangeCode,
+            @RequestBody AdministratorDto.StorageCapacityUpdateReq request
+    ) {
+        AdministratorDto.StorageAnalyticsRes result =
+                storageAnalyticsService.updateProviderCapacity(userDetails, request, rangeCode);
         return ResponseEntity.ok(BaseResponse.success(result));
     }
 }
