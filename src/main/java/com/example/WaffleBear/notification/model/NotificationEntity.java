@@ -24,4 +24,17 @@ public class NotificationEntity {
     
     private String p256dh;
     private String auth;
+
+    // 로그인 상태일 때만 true → 로그아웃 시 false로 변경
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean isActive = true;
+
+    public void activate() {
+        this.isActive = true;
+    }
+
+    public void deactivate() {
+        this.isActive = false;
+    }
 }

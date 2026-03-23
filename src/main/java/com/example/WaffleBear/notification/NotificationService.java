@@ -10,6 +10,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jose4j.lang.JoseException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import com.example.WaffleBear.config.sse.SseService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
@@ -29,13 +30,16 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationListRepository notificationListRepository;
     private final PushService pushService;
+    private final SseService sseService;
 
     public NotificationService(
             NotificationRepository notificationRepository,
-            NotificationListRepository notificationListRepository
+            NotificationListRepository notificationListRepository,
+            SseService sseService
     ) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
         this.notificationRepository = notificationRepository;
         this.notificationListRepository = notificationListRepository;
+        this.sseService = sseService;
 
         if (Security.getProperty(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(new BouncyCastleProvider());
@@ -63,6 +67,7 @@ public class NotificationService {
                 .endpoint(existing.getEndpoint())
                 .p256dh(dto.keys() != null ? dto.keys().get("p256dh") : null)
                 .auth(dto.keys() != null ? dto.keys().get("auth") : null)
+                .isActive(true)
                 .build();
         notificationRepository.save(updated);
 
@@ -80,9 +85,30 @@ public class NotificationService {
         pushService.send(notification);
     }
 
+    // NotificationService.java 내부
     @Async
     public void sendToUser(Long userIdx, String title, String message, Long roomIdx, Long unreadCount) {
+
+
+        // 프론트엔드 toNotificationItem이 기대하는 필드명으로 Map 생성
+        Map<String, Object> payload = Map.of(
+                "type", "NEW_MESSAGE",
+                "idx", userIdx, // 생성된 알림 ID
+                "title", title,
+                "message", message,
+                "roomIdx", roomIdx != null ? roomIdx : 0,
+                "unreadCount", unreadCount != null ? unreadCount : 0
+        );
+
+        sseService.sendToUser(userIdx, "new-message", payload);
         sendPayloadToUser(userIdx, NotificationDto.Payload.create(title, message, roomIdx, unreadCount));
+    }
+
+    @Transactional
+    public void unsubscribe(Long userIdx) {
+        List<NotificationEntity> subscriptions = notificationRepository.findAllByUserIdx(userIdx);
+        subscriptions.forEach(NotificationEntity::deactivate);
+        notificationRepository.saveAll(subscriptions);
     }
 
     public void sendWorkspaceInviteNotification(Long receiverUserIdx, String uuid, String workspaceName) {
@@ -158,6 +184,7 @@ public class NotificationService {
                 .build();
 
         NotificationListEntity saved = notificationListRepository.save(inbox);
+        sseService.sendToUser(receiverUserIdx, "notification", NotificationDto.Payload.fromInbox(saved).toString());
         sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(saved));
         return saved;
     }
@@ -179,7 +206,7 @@ public class NotificationService {
     @Async
     private void sendPayloadToUser(Long receiverUserIdx, NotificationDto.Payload payload) {
         Map<String, NotificationEntity> uniqueSubscriptions = new LinkedHashMap<>();
-        notificationRepository.findByUserIdx(receiverUserIdx).forEach(entity ->
+        notificationRepository.findByUserIdxAndIsActiveTrue(receiverUserIdx).forEach(entity ->
                 uniqueSubscriptions.putIfAbsent(entity.getEndpoint(), entity)
         );
 

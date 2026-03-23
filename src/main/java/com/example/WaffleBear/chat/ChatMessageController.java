@@ -34,9 +34,6 @@ public class ChatMessageController {
             @PathVariable Long roomIdx,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-
-        System.out.println("=== /chat/" + roomIdx + " 호출 ===");
-        System.out.println("user: " + user);  // null이면 JWT 필터 문제
         ChatMessagesDto.PageRes dto = chatMessageService.getMessageList(roomIdx,user.getIdx(), page, size);
         return BaseResponse.success(dto);
     }
@@ -53,10 +50,6 @@ public class ChatMessageController {
 
         Authentication auth = (Authentication) principal;
         AuthUserDetails user = (AuthUserDetails) auth.getPrincipal();
-        System.out.println("=== 메시지 저장 시도 ===");
-        System.out.println("roomIdx: " + roomIdx);
-        System.out.println("userIdx: " + user.getIdx());
-        System.out.println("message: " + req.getContents());
 
         if (user == null || user.getIdx() == null) {
             // 인증 정보가 없으면 처리 중단
@@ -85,5 +78,15 @@ public class ChatMessageController {
 
         String fileUrl = chatMessageService.uploadFile(roomIdx, file, user.getIdx());
         return ResponseEntity.ok(BaseResponse.success(Map.of("fileUrl", fileUrl)));
+    }
+
+    @DeleteMapping("/{roomIdx}/{messageIdx}")
+    public ResponseEntity<?> deleteMessage(
+            @PathVariable Long roomIdx,
+            @PathVariable Long messageIdx,
+            @AuthenticationPrincipal AuthUserDetails user) {
+
+        chatMessageService.deleteMessage(roomIdx, messageIdx, user.getIdx());
+        return ResponseEntity.ok(BaseResponse.success("메시지 삭제 완료"));
     }
 }
