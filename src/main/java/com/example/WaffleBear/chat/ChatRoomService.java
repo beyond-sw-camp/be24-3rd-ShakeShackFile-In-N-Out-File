@@ -37,21 +37,21 @@ public class ChatRoomService {
     private final ParticipantsRepository participantsRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final SimpMessagingTemplate messagingTemplate;
-
+    private final ChatPresenceService chatPresenceService;
     public ChatRoomService(ChatRoomRepository chatRoomRepository,
                            UserRepository userRepository,
                            ParticipantsRepository participantsRepository,
                            ChatMessageRepository chatMessageRepository,
-                           @Lazy SimpMessagingTemplate messagingTemplate) {
+                           @Lazy SimpMessagingTemplate messagingTemplate,
+                            ChatPresenceService chatPresenceService) {
         this.chatRoomRepository = chatRoomRepository;
         this.userRepository = userRepository;
         this.participantsRepository = participantsRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.messagingTemplate = messagingTemplate;
+        this.chatPresenceService = chatPresenceService;
     }
 
-    // 특정 방에 현재 접속 중인 사용자들의 ID 세트 (방ID -> 사용자ID 세트)
-    private final Map<Long, Set<Long>> activeUsers = new ConcurrentHashMap<>();
 
     private void sendSystemMessage(Long roomIdx, String text, MessageType type) {
         Map<String, Object> payload = Map.of(
@@ -262,18 +262,13 @@ public class ChatRoomService {
         participant.setCustomRoomName(newTitle);
     }
     public void enterRoom(Long roomIdx, Long userIdx) {
-        activeUsers.computeIfAbsent(roomIdx, k -> ConcurrentHashMap.newKeySet()).add(userIdx);
+        chatPresenceService.enter(roomIdx, userIdx);
     }
-
     public void leaveRoom(Long roomIdx, Long userIdx) {
-        Set<Long> users = activeUsers.get(roomIdx);
-        if (users != null) users.remove(userIdx);
+        chatPresenceService.leave(roomIdx, userIdx);
     }
-
     public boolean isActiveInRoom(Long roomIdx, Long userIdx) {
-        Set<Long> users = activeUsers.get(roomIdx);
-        return users != null && users.contains(userIdx);
-
+        return chatPresenceService.isActiveInRoom(roomIdx, userIdx);
     }
-    //수정
+
 }

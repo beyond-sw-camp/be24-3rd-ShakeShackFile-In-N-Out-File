@@ -33,6 +33,10 @@ app:
   secure-cookie: ${APP_SECURE_COOKIE:false}
 
 spring:
+  data:
+    redis:
+      host: 10.10.10.100
+      port: 6379
   security:
     oauth2:
       client:
