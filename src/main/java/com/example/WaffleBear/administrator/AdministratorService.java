@@ -15,6 +15,7 @@ import com.example.WaffleBear.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,9 +26,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class AdministratorService {
-
-    private static final String ADMIN_LOGIN_ID = "administrator@administrator.adm";
-    private static final String ADMIN_ROLE = "ROLE_ADMIN";
 
     private final UserRepository userRepository;
     private final FileUpDownloadRepository fileUpDownloadRepository;
@@ -76,6 +74,7 @@ public class AdministratorService {
                 .build();
     }
 
+    @Transactional
     public AdministratorDto.UserRes updateUserStatus(
             AuthUserDetails adminUser,
             Long userIdx,
@@ -112,17 +111,36 @@ public class AdministratorService {
             throw new AccessDeniedException("administrator only");
         }
 
-        String userId = adminUser.getId();
-        String role = adminUser.getRole();
-        if (!ADMIN_ROLE.equals(role) || !ADMIN_LOGIN_ID.equals(userId)) {
+        if (!isAdministrator(adminUser)) {
             throw new AccessDeniedException("administrator only");
         }
     }
 
     private boolean isProtectedAdministrator(User user) {
-        return user != null
-                && ADMIN_ROLE.equals(user.getRole())
-                && ADMIN_LOGIN_ID.equals(resolveUserId(user));
+        return storagePlanService.isAdministrator(user);
+    }
+
+    private boolean isAdministrator(AuthUserDetails adminUser) {
+        if (adminUser == null) {
+            return false;
+        }
+
+        String role = adminUser.getRole();
+        if (role != null && role.toUpperCase(Locale.ROOT).contains("ADMIN")) {
+            return true;
+        }
+
+        String email = adminUser.getEmail();
+        if (email == null || email.isBlank()) {
+            email = adminUser.getId();
+        }
+
+        return storagePlanService.isAdministrator(
+                User.builder()
+                        .email(email)
+                        .role(role)
+                        .build()
+        );
     }
 
     private UserAccountStatus parseAccountStatus(String value) {

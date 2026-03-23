@@ -1,5 +1,8 @@
 package com.example.WaffleBear.file.upload;
 
+import com.example.WaffleBear.administrator.StorageAnalyticsService;
+import com.example.WaffleBear.administrator.storage.DataTransferSource;
+import com.example.WaffleBear.administrator.storage.DataTransferStatus;
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.config.MinioProperties;
@@ -43,6 +46,7 @@ public class UploadService {
     private final MinioProperties minioProperties;
     private final StoragePlanService storagePlanService;
     private final UploadFolderService uploadFolderService;
+    private final StorageAnalyticsService storageAnalyticsService;
     private final Object uploadReservationMonitor = new Object();
     private final Map<String, UploadReservation> uploadReservations = new ConcurrentHashMap<>();
 
@@ -120,7 +124,6 @@ public class UploadService {
 
         String fileOriginName = normalizeOriginName(request.getFileOriginName());
         String fileFormat = normalizeFormat(request.getFileFormat(), fileOriginName);
-        long fileSize = Math.max(0L, request.getFileSize() == null ? 0L : request.getFileSize());
         String finalObjectKey = normalizeOwnedObjectKey(userIdx, request.getFinalObjectKey());
         List<String> chunkObjectKeys = normalizeOwnedObjectKeys(userIdx, request.getChunkObjectKeys());
 
@@ -138,7 +141,8 @@ public class UploadService {
                     .build();
         }
 
-        ensureWithinStorageQuota(userIdx, fileSize, finalObjectKey);
+        long actualFileSize = statObjectSize(finalObjectKey);
+        ensureWithinStorageQuota(userIdx, actualFileSize, finalObjectKey);
 
         if (chunkObjectKeys.isEmpty()) {
             ensureUploadedObjectExists(finalObjectKey);
@@ -150,9 +154,17 @@ public class UploadService {
             ensureUploadedObjectExists(finalObjectKey);
         }
 
-        saveFinalFileInfo(userIdx, request, fileOriginName, fileFormat, fileSize, finalObjectKey);
+        saveFinalFileInfo(userIdx, request, fileOriginName, fileFormat, actualFileSize, finalObjectKey);
         releaseUploadQuota(finalObjectKey);
         deleteObjectKeys(chunkObjectKeys);
+        storageAnalyticsService.recordIngress(
+                userIdx,
+                DataTransferSource.DRIVE_UPLOAD,
+                DataTransferStatus.COMPLETED,
+                actualFileSize,
+                finalObjectKey,
+                fileOriginName
+        );
 
         return UploadDto.CompleteRes.builder()
                 .fileOriginName(fileOriginName)
@@ -168,6 +180,7 @@ public class UploadService {
         cleanupExpiredUploadReservations();
 
         List<String> cleanupTargets = normalizeAbortTargets(userIdx, request);
+        recordAbortedUploadBytes(userIdx, cleanupTargets, request != null ? request.getFinalObjectKey() : null);
         deleteObjectKeys(cleanupTargets);
         releaseUploadQuota(request != null ? request.getFinalObjectKey() : null);
 
@@ -175,6 +188,17 @@ public class UploadService {
                 .action("abort-upload")
                 .affectedCount(cleanupTargets.size())
                 .build();
+    }
+
+    public void synchronizeExpiredReservations() {
+        cleanupExpiredUploadReservations();
+    }
+
+    public long getPendingReservedBytes() {
+        cleanupExpiredUploadReservations();
+        return uploadReservations.values().stream()
+                .mapToLong(UploadReservation::reservedBytes)
+                .sum();
     }
 
     // 업로드를 요청한 사용자의 ID(userIdx)와, 프론트에서 보낸 업로드 초기 요청 정보(request)를 받아서, 업로드용 응답 목록(List<ChunkRes>)을 만드는 메서드
@@ -591,6 +615,53 @@ public class UploadService {
 
     private FileNodeType resolveNodeType(FileInfo entity) {
         return entity.getNodeType() == null ? FileNodeType.FILE : entity.getNodeType();
+    }
+
+    private void recordAbortedUploadBytes(Long userIdx, List<String> objectKeys, String finalObjectKey) {
+        long uploadedBytes = sumExistingObjectSizes(objectKeys);
+        if (uploadedBytes <= 0L) {
+            return;
+        }
+
+        storageAnalyticsService.recordIngress(
+                userIdx,
+                DataTransferSource.DRIVE_UPLOAD,
+                DataTransferStatus.ABORTED,
+                uploadedBytes,
+                finalObjectKey,
+                "aborted-upload"
+        );
+    }
+
+    private long sumExistingObjectSizes(List<String> objectKeys) {
+        if (objectKeys == null || objectKeys.isEmpty()) {
+            return 0L;
+        }
+
+        return objectKeys.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .mapToLong(this::statObjectSize)
+                .sum();
+    }
+
+    private long statObjectSize(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return 0L;
+        }
+
+        try {
+            return Math.max(0L, minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .build()
+            ).size());
+        } catch (Exception exception) {
+            return 0L;
+        }
     }
 
 
