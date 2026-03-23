@@ -5,6 +5,7 @@ import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.config.MinioProperties;
+import com.example.WaffleBear.config.sse.SseService;
 import com.example.WaffleBear.feater.FeaterService;
 import com.example.WaffleBear.notification.NotificationService;
 import com.example.WaffleBear.user.model.User;
@@ -31,6 +32,7 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class ChatMessageService {
+    private final SseService sseService;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
@@ -177,4 +179,62 @@ public class ChatMessageService {
             throw new RuntimeException("파일 업로드 실패: " + e.getMessage());
         }
     }
+    @Transactional
+    public void deleteMessage(Long roomIdx, Long messageIdx, Long userIdx) {
+        ChatMessages message = chatMessageRepository.findByIdxAndChatRoomsIdx(messageIdx, roomIdx)
+                .orElseThrow(() -> new IllegalArgumentException("메시지를 찾을 수 없습니다."));
+
+        if (!message.getSender().getIdx().equals(userIdx)) {
+            throw new IllegalArgumentException("본인 메시지만 삭제할 수 있습니다.");
+        }
+
+        message.markDeleted();
+
+        messagingTemplate.convertAndSend(
+                "/sub/chat/room/" + roomIdx,
+                Map.of(
+                        "type", "MESSAGE_DELETED",
+                        "roomIdx", roomIdx,
+                        "messageIdx", messageIdx,
+                        "contents", message.getContents(),
+                        "messageType", "TEXT"
+                )
+        );
+        sendChatPreviewUpdate(roomIdx);
+    }
+    private void sendChatPreviewUpdate(Long roomIdx) {
+        List<ChatParticipants> participants = participantsRepository.findAllByChatRoomsIdx(roomIdx);
+
+        for (ChatParticipants participant : participants) {
+            Long userIdx = participant.getUsers().getIdx();
+
+            LocalDateTime joinedAt = participant.getJoinedAt() != null
+                    ? participant.getJoinedAt()
+                    : LocalDateTime.of(2000, 1, 1, 0, 0);
+
+            Long lastReadId = participant.getLastReadMessageId() != null
+                    ? participant.getLastReadMessageId()
+                    : 0L;
+
+            String lastMsg = chatMessageRepository
+                    .findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(roomIdx, joinedAt)
+                    .map(ChatMessages::getContents)
+                    .orElse("메시지가 없습니다.");
+
+            long unreadCount = chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
+                    roomIdx,
+                    lastReadId,
+                    joinedAt
+            );
+
+            Map<String, Object> payload = Map.of(
+                    "roomIdx", roomIdx,
+                    "lastMsg", lastMsg,
+                    "unreadCount", unreadCount
+            );
+
+            sseService.sendEventToUser(userIdx, "chat-preview-update", payload);
+        }
+    }
+
 }

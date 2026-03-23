@@ -47,6 +47,19 @@ public class ChatMessages {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean deleted = false;
+
+    public void markDeleted() {
+        this.deleted = true;
+        this.contents = "삭제된 메시지입니다.";
+        this.fileUrl = null;
+        this.fileName = null;
+        this.fileType = null;
+        this.fileSize = null;
+        this.messageType = MessageType.TEXT;
+    }
 
 
 }
