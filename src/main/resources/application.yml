@@ -119,17 +119,6 @@ minio:
   s3-region: ${S3AMAZON_REGION:}
   presigned-url-expiry-seconds: 600
 
-management:
-  otlp:
-    tracing:
-      # 예거 서버(.40)의 OTLP HTTP 수신 포트
-      endpoint: http://192.100.1.40:4318/v1/traces
-  tracing:
-    sampling:
-      # 테스트 중에는 모든 요청을 추적하도록 1.0(100%)으로 설정
-      # 나중에 부하 테스트가 끝나면 0.1 정도로 낮추는 게 좋습니다.
-      probability: 1.0
-
 logging:
   level:
     org:
