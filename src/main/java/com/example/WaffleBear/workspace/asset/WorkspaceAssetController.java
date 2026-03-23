@@ -27,14 +27,37 @@ public class WorkspaceAssetController {
 
     private final WorkspaceAssetService workspaceAssetService;
 
+    /**
+     * 에셋 목록 조회
+     */
     @GetMapping("/{workspaceId}/assets")
     public ResponseEntity<List<WorkspaceAssetDto.AssetRes>> listAssets(
             @AuthenticationPrincipal AuthUserDetails user,
             @PathVariable Long workspaceId
     ) {
         return ResponseEntity.ok(
-                workspaceAssetService.listAssets(user != null ? user.getIdx() : 0L, workspaceId)
+                workspaceAssetService.listAssets(
+                        user != null ? user.getIdx() : 0L,
+                        workspaceId
+                )
         );
+    }
+
+    /**
+     * 여러 파일 업로드 (일반 에셋용)
+     */
+    @PostMapping("/{workspaceId}/assets")
+    public BaseResponse<?> uploadWorkspaceAssets(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @RequestParam("files") MultipartFile[] files
+    ) {
+        List<WorkspaceAssetDto.AssetRes> result = workspaceAssetService.uploadWorkspaceAssets(
+                user.getIdx(),
+                workspaceId,
+                files
+        );
+        return BaseResponse.success(result);  // ✅ BaseResponse로 감싸기
     }
 
     @PostMapping(value = "/{workspaceId}/assets/editorjs",
@@ -46,7 +69,7 @@ public class WorkspaceAssetController {
             @RequestParam("image") MultipartFile image
     ) {
         WorkspaceAssetService.EditorJsUploadResult
-                file = workspaceAssetService.uploadAssets(user.getIdx(),workspaceId, image);
+                file = workspaceAssetService.uploadAssetsEditorJs(user.getIdx(),workspaceId, image);
 
         return ResponseEntity.ok(Map.of(
                 "success", 1,
@@ -65,6 +88,19 @@ public class WorkspaceAssetController {
         workspaceAssetService.deleteEditorJsImage(user.getIdx(), workspaceId, assetIdx);
         return ResponseEntity.ok(Map.of("success", 1));
     }
+    /**
+     * 일반 에셋 삭제
+     */
+    @DeleteMapping("/{workspaceId}/assets/{assetId}")
+    public ResponseEntity<?> deleteWorkspaceAsset(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetId
+    ) {
+        workspaceAssetService.deleteWorkspaceAsset(user.getIdx(), workspaceId, assetId);
+        return ResponseEntity.ok(Map.of("success", 1));
+    }
+
 
     @PostMapping("/{workspaceId}/assets/{assetId}/save-to-drive")
     public ResponseEntity<FileCommonDto.FileListItemRes> saveAssetToDrive(
