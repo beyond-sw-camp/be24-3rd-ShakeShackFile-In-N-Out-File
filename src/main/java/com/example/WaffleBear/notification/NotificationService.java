@@ -100,7 +100,7 @@ public class NotificationService {
                 "unreadCount", unreadCount != null ? unreadCount : 0
         );
 
-        sseService.sendToUser(userIdx, "new-message", payload);
+        sseService.sendEventToUser(userIdx, "new-message", payload);
         sendPayloadToUser(userIdx, NotificationDto.Payload.create(title, message, roomIdx, unreadCount));
     }
 
@@ -184,7 +184,7 @@ public class NotificationService {
                 .build();
 
         NotificationListEntity saved = notificationListRepository.save(inbox);
-        sseService.sendToUser(receiverUserIdx, "notification", NotificationDto.Payload.fromInbox(saved).toString());
+        sseService.sendEventToUser(receiverUserIdx, "notification", NotificationDto.Payload.fromInbox(saved).toString());
         sendPayloadToUser(receiverUserIdx, NotificationDto.Payload.fromInbox(saved));
         return saved;
     }

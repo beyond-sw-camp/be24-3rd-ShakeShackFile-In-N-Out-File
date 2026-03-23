@@ -1,5 +1,6 @@
 package com.example.WaffleBear.workspace.asset;
 
+import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.file.dto.FileCommonDto;
 import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetDto;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -35,26 +37,33 @@ public class WorkspaceAssetController {
         );
     }
 
-    @PostMapping(value = "/{workspaceId}/assets", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<List<WorkspaceAssetDto.AssetRes>> uploadAssets(
+    @PostMapping(value = "/{workspaceId}/assets/editorjs",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity uploadEditorJsImage(
             @AuthenticationPrincipal AuthUserDetails user,
             @PathVariable Long workspaceId,
-            @RequestParam("files") List<MultipartFile> files
+            @RequestParam("image") MultipartFile image
     ) {
-        return ResponseEntity.ok(
-                workspaceAssetService.uploadAssets(user != null ? user.getIdx() : 0L, workspaceId, files)
-        );
+        WorkspaceAssetService.EditorJsUploadResult
+                file = workspaceAssetService.uploadAssets(user.getIdx(),workspaceId, image);
+
+        return ResponseEntity.ok(Map.of(
+                "success", 1,
+                "file", Map.of("url", file.fileUrl(),
+                        "assetIdx", file.assetIdx())));
     }
 
-    @DeleteMapping("/{workspaceId}/assets/{assetId}")
-    public ResponseEntity<WorkspaceAssetDto.ActionRes> deleteAsset(
+    @DeleteMapping(value = "/{workspaceId}/assets/{assetIdx}/editorjs",
+            consumes = { MediaType.APPLICATION_JSON_VALUE, MediaType.ALL_VALUE },
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deleteEditorJsImage(
             @AuthenticationPrincipal AuthUserDetails user,
             @PathVariable Long workspaceId,
-            @PathVariable Long assetId
+            @PathVariable Long assetIdx      // ✅ assetIdx 로 삭제
     ) {
-        return ResponseEntity.ok(
-                workspaceAssetService.deleteAsset(user != null ? user.getIdx() : 0L, workspaceId, assetId)
-        );
+        workspaceAssetService.deleteEditorJsImage(user.getIdx(), workspaceId, assetIdx);
+        return ResponseEntity.ok(Map.of("success", 1));
     }
 
     @PostMapping("/{workspaceId}/assets/{assetId}/save-to-drive")
