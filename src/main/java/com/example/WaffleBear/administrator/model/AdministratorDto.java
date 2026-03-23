@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class AdministratorDto {
@@ -82,5 +83,117 @@ public class AdministratorDto {
     @Builder
     public static class StatusUpdateReq {
         private String accountStatus;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StorageAnalyticsRes {
+        private StorageAnalyticsWindowRes window;
+        private StorageSummaryRes summary;
+        private StorageIntegrityRes integrity;
+        private List<StorageBreakdownRes> storageBreakdown;
+        private List<TransferBreakdownRes> transferBreakdown;
+        private List<UserTransferStatRes> users;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StorageSummaryRes {
+        private long providerCapacityBytes;
+        private long providerUsedBytes;
+        private long providerRemainingBytes;
+        private double providerUsagePercent;
+        private long allocatedUserQuotaBytes;
+        private long allocatedUserUsedBytes;
+        private double allocatedUserUsagePercent;
+        private long totalIngressBytes;
+        private long completedIngressBytes;
+        private long canceledIngressBytes;
+        private long totalEgressBytes;
+        private long trackedUserCount;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StorageAnalyticsWindowRes {
+        private String rangeCode;
+        private String rangeLabel;
+        private LocalDateTime startedAt;
+        private LocalDateTime endedAt;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StorageIntegrityRes {
+        private boolean healthy;
+        private int issueCount;
+        private List<String> issues;
+        private long pendingDriveReservationBytes;
+        private LocalDateTime generatedAt;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StorageBreakdownRes {
+        private String source;
+        private String label;
+        private long storedBytes;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class TransferBreakdownRes {
+        private String direction;
+        private String source;
+        private String label;
+        private String status;
+        private long bytes;
+        private long eventCount;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class UserTransferStatRes {
+        private Long idx;
+        private String id;
+        private String name;
+        private String planCode;
+        private String planLabel;
+        private long quotaBytes;
+        private long currentStoredBytes;
+        private long totalIngressBytes;
+        private long completedIngressBytes;
+        private long canceledIngressBytes;
+        private long totalEgressBytes;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StorageCapacityUpdateReq {
+        private Long providerCapacityBytes;
     }
 }

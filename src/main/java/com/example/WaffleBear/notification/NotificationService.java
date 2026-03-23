@@ -1,5 +1,6 @@
 package com.example.WaffleBear.notification;
 
+import com.example.WaffleBear.config.sse.SseService;
 import com.example.WaffleBear.notification.model.NotificationDto;
 import com.example.WaffleBear.notification.model.NotificationEntity;
 import com.example.WaffleBear.notification.model.NotificationListEntity;
@@ -10,11 +11,11 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jose4j.lang.JoseException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import com.example.WaffleBear.config.sse.SseService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Security;
@@ -36,7 +37,7 @@ public class NotificationService {
             NotificationRepository notificationRepository,
             NotificationListRepository notificationListRepository,
             SseService sseService
-    ) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
+    ) throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException, InvalidKeyException {
         this.notificationRepository = notificationRepository;
         this.notificationListRepository = notificationListRepository;
         this.sseService = sseService;
@@ -85,20 +86,25 @@ public class NotificationService {
         pushService.send(notification);
     }
 
-    // NotificationService.java 내부
     @Async
-    public void sendToUser(Long userIdx, String title, String message, Long roomIdx, Long unreadCount) {
-
-
-        // 프론트엔드 toNotificationItem이 기대하는 필드명으로 Map 생성
-        Map<String, Object> payload = Map.of(
-                "type", "NEW_MESSAGE",
-                "idx", userIdx, // 생성된 알림 ID
-                "title", title,
-                "message", message,
-                "roomIdx", roomIdx != null ? roomIdx : 0,
-                "unreadCount", unreadCount != null ? unreadCount : 0
-        );
+    public void sendToUser(
+            Long userIdx,
+            String title,
+            String message,
+            String lastMsg,
+            Long roomIdx,
+            Long unreadCount,
+            String messageType
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "NEW_MESSAGE");
+        payload.put("idx", userIdx);
+        payload.put("title", title);
+        payload.put("message", message);
+        payload.put("lastMsg", lastMsg);
+        payload.put("roomIdx", roomIdx != null ? roomIdx : 0L);
+        payload.put("unreadCount", unreadCount != null ? unreadCount : 0L);
+        payload.put("messageType", messageType);
 
         sseService.sendEventToUser(userIdx, "new-message", payload);
         sendPayloadToUser(userIdx, NotificationDto.Payload.create(title, message, roomIdx, unreadCount));
