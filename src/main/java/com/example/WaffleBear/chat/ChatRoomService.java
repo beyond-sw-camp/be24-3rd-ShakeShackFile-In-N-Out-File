@@ -29,6 +29,8 @@ import org.springframework.data.domain.Pageable;
 @Service
 
 public class ChatRoomService {
+    private static final LocalDateTime DEFAULT_JOINED_AT = LocalDateTime.of(2000, 1, 1, 0, 0);
+
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final ParticipantsRepository participantsRepository;
@@ -187,27 +189,31 @@ public class ChatRoomService {
                 .distinct()
                 .toList();
 
+        if (roomIds.isEmpty()) {
+            ChatRoomsDto.PageRes emptyResponse = ChatRoomsDto.PageRes.from(
+                    result,
+                    Map.of(),
+                    Map.of(),
+                    Map.of()
+            );
+            chatListCacheService.put(userIdx, page, size, emptyResponse);
+            return emptyResponse;
+        }
+
         Map<Long, Long> participantCountMap = participantsRepository.countParticipantsByRoomIds(roomIds).stream()
                 .collect(Collectors.toMap(
                         ParticipantsRepository.RoomParticipantCountView::getRoomIdx,
                         ParticipantsRepository.RoomParticipantCountView::getParticipantCount
                 ));
 
-        Map<Long, Long> unreadMap = pageItems.stream()
+        Map<Long, Long> unreadMap = chatMessageRepository.countUnreadCountsByUserAndRoomIds(
+                        userIdx,
+                        roomIds,
+                        DEFAULT_JOINED_AT
+                ).stream()
                 .collect(Collectors.toMap(
-                        p -> p.getChatRooms().getIdx(),
-                        p -> {
-                            Long lastReadId = p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L;
-                            LocalDateTime joinedAt = p.getJoinedAt() != null
-                                    ? p.getJoinedAt()
-                                    : LocalDateTime.of(2000, 1, 1, 0, 0);
-
-                            return chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
-                                    p.getChatRooms().getIdx(),
-                                    lastReadId,
-                                    joinedAt
-                            );
-                        }
+                        ChatMessageRepository.RoomUnreadCountView::getRoomIdx,
+                        ChatMessageRepository.RoomUnreadCountView::getUnreadCount
                 ));
 
         Map<Long, String> lastMessageMap = pageItems.stream()
@@ -217,7 +223,7 @@ public class ChatRoomService {
                             ChatRooms room = p.getChatRooms();
                             LocalDateTime joinedAt = p.getJoinedAt() != null
                                     ? p.getJoinedAt()
-                                    : LocalDateTime.of(2000, 1, 1, 0, 0);
+                                    : DEFAULT_JOINED_AT;
 
                             if (room.getLastMessageTime() == null || room.getLastMessageTime().isBefore(joinedAt)) {
                                 return "";
