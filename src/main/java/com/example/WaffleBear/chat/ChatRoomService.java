@@ -251,20 +251,15 @@ public class ChatRoomService {
     }
     public void enterRoom(Long roomIdx, Long userIdx) {
         activeUsers.computeIfAbsent(roomIdx, k -> ConcurrentHashMap.newKeySet()).add(userIdx);
-        System.out.println("✅ enterRoom - 방:" + roomIdx + " 유저:" + userIdx);
-        System.out.println("현재 activeUsers: " + activeUsers);
     }
 
     public void leaveRoom(Long roomIdx, Long userIdx) {
         Set<Long> users = activeUsers.get(roomIdx);
         if (users != null) users.remove(userIdx);
-        System.out.println("🚪 leaveRoom - 방:" + roomIdx + " 유저:" + userIdx);
-        System.out.println("현재 activeUsers: " + activeUsers);
     }
 
     public boolean isActiveInRoom(Long roomIdx, Long userIdx) {
         Set<Long> users = activeUsers.get(roomIdx);
-        System.out.println("방번호: " + roomIdx + ", 유저: " + userIdx + ", 접속상태: " + (users != null && users.contains(userIdx))); // 로그 추가
         return users != null && users.contains(userIdx);
 
     }

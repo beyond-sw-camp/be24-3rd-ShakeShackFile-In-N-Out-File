@@ -29,9 +29,6 @@ public class WebSocketHandler extends TextWebSocketHandler {
         Authentication auth = (Authentication) session.getAttributes().get("user");
         AuthUserDetails user = (AuthUserDetails) auth.getPrincipal();
 
-        System.out.printf(user.getUsername());
-
-
         for (WebSocketSession to : sessions) {
             if (to.equals(session)) {
                 continue;

@@ -15,14 +15,9 @@ import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetType;
 import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.relation.AccessRole;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
+import com.example.WaffleBear.workspace.repository.PostRepository;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
-import io.minio.CopyObjectArgs;
-import io.minio.CopySource;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectsArgs;
-import io.minio.Result;
+import io.minio.*;
 import io.minio.http.Method;
 import io.minio.messages.DeleteObject;
 import lombok.RequiredArgsConstructor;
@@ -33,28 +28,31 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class WorkspaceAssetService {
 
-    private static final String DEFAULT_WORKSPACE_BUCKET = "innoutfilebucket";
+    // ─── 하드코딩 버킷명 제거 ──────────────────────────────────────────────────
+    // 버킷명은 MinioProperties 에서 주입받습니다.
+    // 워크스페이스 에셋 → bucket_work
+    // 드라이브 저장     → bucket_cloud  (FileUpDownloadMinioService 와 동일)
 
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
             "jpg", "jpeg", "png", "gif", "svg", "webp", "bmp", "heic", "avif", "apng", "jfif", "tif", "tiff"
     );
+    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;   // 5MB
+    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;   // 30MB
+    public record EditorJsUploadResult(Long assetIdx, String fileUrl) {}
+    private record WorkspacePermission(Post workspace, AccessRole accessRole) {}
+
 
     private final FileUpDownloadRepository fileUpDownloadRepository;
     private final UserRepository userRepository;
     private final WorkspaceAssetRepository workspaceAssetRepository;
     private final UserPostRepository userPostRepository;
+    private final PostRepository postRepository;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final SimpMessagingTemplate messagingTemplate;
@@ -70,94 +68,117 @@ public class WorkspaceAssetService {
     }
 
     @Transactional
-    public List<WorkspaceAssetDto.AssetRes> uploadAssets(Long userIdx, Long workspaceIdx, List<MultipartFile> files) {
+    public EditorJsUploadResult uploadAssets(Long userIdx, Long workspaceIdx, MultipartFile image) {
         WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, true);
-        if (files == null || files.isEmpty()) {
+        if (image == null || image.isEmpty()) {
             throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
         }
+        String contentType = image.getContentType();
+        boolean isImage = IMAGE_EXTENSIONS.contains(contentType);
 
-        String objectFolder = "asset-" + UUID.randomUUID();
-        List<WorkspaceAsset> assetsToSave = new ArrayList<>();
-        List<String> uploadedObjectKeys = new ArrayList<>();
+        if(permission.accessRole == AccessRole.READ) {
+            throw new RuntimeException("읽기만 가능합니다.");
+        }
+        // 용량 체크
+        if (isImage && image.getSize() > MAX_IMAGE_SIZE) {
+            throw new IllegalArgumentException("이미지는 5MB 이하만 업로드 가능합니다.");
+        }
+        if (!isImage && image.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("파일은 30MB 이하만 업로드 가능합니다.");
+        }
+        Post result = postRepository.findById(workspaceIdx).orElseThrow(
+                () -> new RuntimeException("해당 워크스페이스가 존재하지않습니다.")
+        );
+        String objectKey = "asset/" + result.getUUID() + "/"
+                + System.currentTimeMillis() + "_" + image.getOriginalFilename();
 
+        // ✅ 1. Minio 업로드
         try {
-            for (MultipartFile file : files) {
-                validateFile(file);
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .stream(image.getInputStream(), image.getSize(), -1)
+                            .contentType(contentType)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("파일 업로드 실패: " + e.getMessage());
+        }
 
-                String originalName = sanitizeOriginalName(file.getOriginalFilename());
-                String extension = extractExtension(originalName);
-                String storedFileName = buildStoredFileName(extension);
-                String objectKey = buildObjectKey(permission.workspace(), userIdx, objectFolder, storedFileName);
-                String contentType = resolveContentType(file.getContentType());
-                WorkspaceAssetType assetType = resolveAssetType(contentType, extension);
+        // ✅ 2. DB 저장
+        String originalName   = image.getOriginalFilename();
+        String extension      = extractExtension(originalName == null ? "" : originalName);
+        String storedFileName = objectKey.substring(objectKey.lastIndexOf('/') + 1);
+        WorkspaceAssetType assetType = resolveAssetType(contentType, extension);
 
-                try (InputStream inputStream = file.getInputStream()) {
-                    minioClient.putObject(
-                            PutObjectArgs.builder()
-                                    .bucket(resolveWorkspaceBucketName())
-                                    .object(objectKey)
-                                    .stream(inputStream, file.getSize(), -1)
-                                    .contentType(contentType)
-                                    .build()
-                    );
-                }
-
-                uploadedObjectKeys.add(objectKey);
-                assetsToSave.add(WorkspaceAsset.builder()
-                        .workspace(permission.workspace())
+        WorkspaceAsset saved = workspaceAssetRepository.save(
+                WorkspaceAsset.builder()
+                        .workspace(result)
                         .uploader(User.builder().idx(userIdx).build())
                         .assetType(assetType)
                         .originalName(originalName)
                         .storedFileName(storedFileName)
-                        .objectFolder(objectFolder)
+                        .objectFolder("asset/" + result.getUUID())
                         .objectKey(objectKey)
                         .contentType(contentType)
-                        .fileSize(file.getSize())
-                        .build());
-            }
+                        .fileSize(image.getSize())
+                        .build()
+        );
 
-            List<WorkspaceAssetDto.AssetRes> savedAssets = workspaceAssetRepository.saveAll(assetsToSave)
-                    .stream()
-                    .map(this::toAssetRes)
-                    .toList();
-            publishAssetEvent(permission.workspace().getIdx(), "UPSERT", userIdx, savedAssets, savedAssets.stream()
-                    .map(WorkspaceAssetDto.AssetRes::idx)
-                    .toList());
-            return savedAssets;
-        } catch (BaseException exception) {
-            deleteObjectKeys(uploadedObjectKeys);
-            throw exception;
-        } catch (Exception exception) {
-            deleteObjectKeys(uploadedObjectKeys);
-            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        // ✅ 3. presigned URL + assetIdx 반환
+        try {
+            String fileUrl = minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .expiry(60 * 60 * 24)
+                            .build()
+            );
+            return new EditorJsUploadResult(saved.getIdx(), fileUrl);
+        } catch (Exception e) {
+            throw new RuntimeException("URL 생성 실패: " + e.getMessage());
         }
     }
 
     @Transactional
-    public WorkspaceAssetDto.ActionRes deleteAsset(Long userIdx, Long workspaceIdx, Long assetIdx) {
+    public void deleteEditorJsImage(Long userIdx, Long workspaceIdx, Long assetIdx) {
         WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, true);
-        WorkspaceAsset asset = workspaceAssetRepository.findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
+
+        WorkspaceAsset asset = workspaceAssetRepository
+                .findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
 
-        deleteObjectKeys(List.of(asset.getObjectKey()));
-        workspaceAssetRepository.delete(asset);
-        publishAssetEvent(permission.workspace().getIdx(), "DELETE", userIdx, List.of(), List.of(asset.getIdx()));
+        // ✅ 업로드한 버킷(bucket_cloud)에서 삭제
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(asset.getObjectKey())
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("파일 삭제 실패: " + e.getMessage());
+        }
 
-        return new WorkspaceAssetDto.ActionRes(asset.getIdx(), "delete");
+        // ✅ DB에서도 삭제
+        workspaceAssetRepository.delete(asset);
     }
 
     @Transactional
     public FileCommonDto.FileListItemRes saveAssetToDrive(Long userIdx, Long workspaceIdx, Long assetIdx, Long parentId) {
         WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, false);
-        WorkspaceAsset asset = workspaceAssetRepository.findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
+        WorkspaceAsset asset = workspaceAssetRepository
+                .findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
                 .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
 
-        FileInfo parentFolder = resolveParentFolder(userIdx, parentId);
-        String sourceBucket = resolveWorkspaceBucketName();
-        String targetBucket = resolveDriveBucketName();
-        String fileFormat = resolveDriveFileFormat(asset);
-        String savedFileName = buildDriveStoredFileName(fileFormat);
-        String savedObjectKey = userIdx + "/" + savedFileName;
+        FileInfo parentFolder  = resolveParentFolder(userIdx, parentId);
+        String sourceBucket    = resolveWorkspaceBucketName();   // bucket_work
+        String targetBucket    = resolveDriveBucketName();       // bucket_cloud
+        String fileFormat      = resolveDriveFileFormat(asset);
+        String savedFileName   = buildDriveStoredFileName(fileFormat);
+        String savedObjectKey  = userIdx + "/" + savedFileName;
 
         try {
             minioClient.copyObject(
@@ -209,6 +230,8 @@ public class WorkspaceAssetService {
         workspaceAssetRepository.deleteAllInBatch(assets);
     }
 
+    // ─── 내부 헬퍼 ────────────────────────────────────────────────────────────
+
     private WorkspacePermission requireWorkspaceAccess(Long userIdx, Long workspaceIdx, boolean writeRequired) {
         if (userIdx == null || userIdx <= 0 || workspaceIdx == null || workspaceIdx <= 0) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
@@ -254,7 +277,6 @@ public class WorkspaceAssetService {
         if (lastDot < 0 || lastDot >= fileName.length() - 1) {
             return "";
         }
-
         return fileName.substring(lastDot + 1).trim().toLowerCase(Locale.ROOT);
     }
 
@@ -281,7 +303,6 @@ public class WorkspaceAssetService {
         if (contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
             return WorkspaceAssetType.IMAGE;
         }
-
         return IMAGE_EXTENSIONS.contains(extension) ? WorkspaceAssetType.IMAGE : WorkspaceAssetType.FILE;
     }
 
@@ -296,7 +317,7 @@ public class WorkspaceAssetService {
 
     private String resolveDriveFileFormat(WorkspaceAsset asset) {
         String originalName = asset == null ? null : asset.getOriginalName();
-        String extension = extractExtension(originalName == null ? "" : originalName);
+        String extension    = extractExtension(originalName == null ? "" : originalName);
         if (!extension.isBlank()) {
             return extension;
         }
@@ -308,7 +329,7 @@ public class WorkspaceAssetService {
 
     private WorkspaceAssetDto.AssetRes toAssetRes(WorkspaceAsset asset) {
         String downloadUrl = generatePresignedGetUrl(asset.getObjectKey());
-        String previewUrl = asset.getAssetType() == WorkspaceAssetType.IMAGE ? downloadUrl : null;
+        String previewUrl  = asset.getAssetType() == WorkspaceAssetType.IMAGE ? downloadUrl : null;
 
         return new WorkspaceAssetDto.AssetRes(
                 asset.getIdx(),
@@ -377,7 +398,13 @@ public class WorkspaceAssetService {
         }
     }
 
-    private void publishAssetEvent(Long workspaceIdx, String action, Long actorUserIdx, List<WorkspaceAssetDto.AssetRes> assets, List<Long> assetIdxList) {
+    private void publishAssetEvent(
+            Long workspaceIdx,
+            String action,
+            Long actorUserIdx,
+            List<WorkspaceAssetDto.AssetRes> assets,
+            List<Long> assetIdxList
+    ) {
         if (workspaceIdx == null) {
             return;
         }
@@ -394,13 +421,20 @@ public class WorkspaceAssetService {
         );
     }
 
+    // ─── 버킷 이름 해석 ───────────────────────────────────────────────────────
+    // 워크스페이스 에셋은 application.yml 의 minio.bucket_work 버킷에 저장합니다.
+    // 드라이브 저장 시 복사 대상은 minio.bucket_cloud 버킷입니다.
+    // FileUpDownloadMinioService 와 동일한 규칙을 따릅니다.
+
     private String resolveWorkspaceBucketName() {
-        return DEFAULT_WORKSPACE_BUCKET;
+        return minioProperties.getBucket_work();
     }
 
     private String resolveDriveBucketName() {
-        return resolveWorkspaceBucketName();
+        return minioProperties.getBucket_cloud();
     }
+
+    // ─── 기타 헬퍼 ────────────────────────────────────────────────────────────
 
     private FileInfo resolveParentFolder(Long userIdx, Long parentId) {
         if (parentId == null) {
@@ -425,7 +459,6 @@ public class WorkspaceAssetService {
         if (!StringUtils.hasText(userName)) {
             userName = user.getEmail();
         }
-
         if (!StringUtils.hasText(userName)) {
             userName = "user-" + userIdx;
         }
@@ -486,8 +519,5 @@ public class WorkspaceAssetService {
         } catch (Exception exception) {
             return null;
         }
-    }
-
-    private record WorkspacePermission(Post workspace, AccessRole accessRole) {
     }
 }

@@ -44,12 +44,17 @@ public class Post {
     @Column(nullable = false)
     private String UUID;
 
+    @Setter
+    @Column(name = "only_role")
+    private isShare onlyRole;
+
     @PrePersist
     public void setCreatedAt() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = createdAt;
         this.type = false;
         this.status = isShare.Private;
+        this.onlyRole = isShare.Private;
     }
 
     @PreUpdate
