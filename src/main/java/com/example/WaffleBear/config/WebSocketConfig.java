@@ -8,6 +8,7 @@ import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.utils.JwtUtil;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -31,6 +32,8 @@ import java.util.List;
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     private final ChatRoomService chatRoomService;
     private final JwtUtil jwtUtil;
@@ -39,7 +42,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-stomp")
-                .setAllowedOrigins("http://localhost:5173")
+                .setAllowedOrigins(frontendUrl)
                 .withSockJS();
     }
 

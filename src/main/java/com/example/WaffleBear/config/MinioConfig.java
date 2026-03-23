@@ -4,6 +4,7 @@ import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 
 @Configuration
 @RequiredArgsConstructor
@@ -12,9 +13,14 @@ public class MinioConfig {
 
     @Bean
     public MinioClient minioClient() {
-        return MinioClient.builder()
+        MinioClient.Builder builder = MinioClient.builder()
                 .endpoint(minioProperties.getEndpoint())
-                .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
-                .build();
+                .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey());
+
+        if (StringUtils.hasText(minioProperties.getRegion())) {
+            builder.region(minioProperties.getRegion());
+        }
+
+        return builder.build();
     }
 }
