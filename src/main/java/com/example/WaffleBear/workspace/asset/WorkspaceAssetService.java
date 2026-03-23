@@ -96,7 +96,7 @@ public class WorkspaceAssetService {
         try {
             minioClient.putObject(
                     PutObjectArgs.builder()
-                            .bucket(minioProperties.getBucket_work())
+                            .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
                             .stream(image.getInputStream(), image.getSize(), -1)
                             .contentType(contentType)
@@ -131,7 +131,7 @@ public class WorkspaceAssetService {
             String fileUrl = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
-                            .bucket(minioProperties.getBucket_work())
+                            .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
                             .expiry(60 * 60 * 24)
                             .build()
@@ -154,7 +154,7 @@ public class WorkspaceAssetService {
         try {
             minioClient.removeObject(
                     RemoveObjectArgs.builder()
-                            .bucket(minioProperties.getBucket_work())
+                            .bucket(minioProperties.getBucket_cloud())
                             .object(asset.getObjectKey())
                             .build()
             );
