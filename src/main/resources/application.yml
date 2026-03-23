@@ -35,7 +35,7 @@ app:
 spring:
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:10.10.10.100}
       port: ${REDIS_PORT:6379}
   security:
     oauth2:
