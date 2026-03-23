@@ -1,0 +1,2 @@
+rootProject.name = 'WaffleBear'
+include 'common', 'sse'
