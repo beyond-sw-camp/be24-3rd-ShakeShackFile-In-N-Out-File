@@ -2,6 +2,7 @@ package com.example.WaffleBear.chat;
 
 import com.example.WaffleBear.chat.model.dto.ChatParticipantsDto;
 import com.example.WaffleBear.chat.model.dto.ChatRoomsDto;
+import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.chat.model.entity.MessageType;
@@ -206,7 +207,7 @@ public class ChatRoomService {
                             return chatMessageRepository
                                     .findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(
                                             p.getChatRooms().getIdx(), joinedAt)
-                                    .map(msg -> msg.getContents())
+                                    .map(this::getPreviewMessage)
                                     .orElse(""); // ✅ joinedAt 이전 메시지면 빈 문자열
                         }
                 ));
@@ -218,6 +219,17 @@ public class ChatRoomService {
 
     return ChatRoomsDto.PageRes.from(result, unreadMap, lastMessageMap);
 }
+    private String getPreviewMessage(ChatMessages message) {
+        if (message == null) return "메시지가 없습니다.";
+        if (message.isDeleted()) return "삭제된 메시지입니다.";
+        if (message.getMessageType() == MessageType.IMAGE) return "사진";
+        if (message.getMessageType() == MessageType.FILE) return "문서";
+
+        String contents = message.getContents();
+        return (contents == null || contents.isBlank()) ? "메시지가 없습니다." : contents;
+    }
+
+
     @Transactional
     public void exit(Long roomIdx, Long userIdx) {
         User user = userRepository.findById(userIdx)
