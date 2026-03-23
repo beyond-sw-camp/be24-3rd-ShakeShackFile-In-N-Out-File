@@ -4,6 +4,7 @@ import com.example.WaffleBear.chat.model.dto.ChatMessagesDto;
 import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
+import com.example.WaffleBear.chat.model.entity.MessageType;
 import com.example.WaffleBear.config.MinioProperties;
 import com.example.WaffleBear.config.sse.SseService;
 import com.example.WaffleBear.feater.FeaterService;
@@ -43,8 +44,9 @@ public class ChatMessageService {
     private final FeaterService featerService;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
-    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;   // 5MB
-    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;   // 30MB
+
+    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;
     private static final Set<String> IMAGE_TYPES = Set.of(
             "image/png", "image/jpeg", "image/jpg"
     );
@@ -54,20 +56,18 @@ public class ChatMessageService {
         ChatRooms room = chatRoomRepository.findById(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
 
-        // ✅ 참여자 정보에서 joinedAt 가져오기
         ChatParticipants participant = participantsRepository
                 .findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
                 .orElseThrow(() -> new RuntimeException("해당 채팅방에 접근 권한이 없습니다."));
 
         LocalDateTime joinedAt = participant.getJoinedAt() != null
                 ? participant.getJoinedAt()
-                : LocalDateTime.of(2000, 1, 1, 0, 0); // null 방어용 기본값
+                : LocalDateTime.of(2000, 1, 1, 0, 0);
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<ChatMessages> result = chatMessageRepository
                 .findAllByChatRoomsAndCreatedAtAfter(room, joinedAt, pageable);
 
-        // 각 메시지마다 readCount 계산
         List<ChatMessagesDto.ListRes> messageList = result.getContent().stream()
                 .map(msg -> {
                     int messageUnreadCount = chatMessageRepository.countUnreadParticipants(
@@ -95,7 +95,8 @@ public class ChatMessageService {
                 .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다."));
 
         ChatMessages message = chatMessageRepository.save(req.toEntity(room, user));
-        room.updateLastMessage(message.getContents(), message.getCreatedAt());
+        String previewMessage = getPreviewMessage(message);
+        room.updateLastMessage(previewMessage, message.getCreatedAt());
 
         List<ChatParticipants> participants = participantsRepository.findAllByChatRoomsIdx(roomIdx);
 
@@ -103,7 +104,6 @@ public class ChatMessageService {
             Long userIdx = participant.getUsers().getIdx();
 
             if (userIdx.equals(senderIdx)) {
-                // 발신자 읽음 처리 (별도 조회 불필요)
                 participant.updateLastReadMessageId(message.getIdx());
                 continue;
             }
@@ -113,8 +113,16 @@ public class ChatMessageService {
                         roomIdx,
                         participant.getLastReadMessageId() != null ? participant.getLastReadMessageId() : 0L
                 );
-                notificationService.sendToUser(userIdx, room.getTitle(),
-                        user.getName() + ": " + message.getContents(), roomIdx, unreadCount);
+
+                notificationService.sendToUser(
+                        userIdx,
+                        room.getTitle(),
+                        user.getName() + ": " + previewMessage,
+                        previewMessage,
+                        roomIdx,
+                        unreadCount,
+                        message.getMessageType() != null ? message.getMessageType().name() : "TEXT"
+                );
             }
         }
 
@@ -133,7 +141,6 @@ public class ChatMessageService {
                 .ifPresent(msg -> {
                     participant.updateLastReadMessageId(msg.getIdx());
 
-                    // 읽음 이벤트 브로드캐스트 → 방 안의 모든 사람 화면 갱신
                     messagingTemplate.convertAndSend(
                             "/sub/chat/room/" + roomIdx,
                             Map.of("type", "READ_UPDATE", "userIdx", userIdx)
@@ -145,7 +152,6 @@ public class ChatMessageService {
         String contentType = file.getContentType();
         boolean isImage = IMAGE_TYPES.contains(contentType);
 
-        // 용량 체크
         if (isImage && file.getSize() > MAX_IMAGE_SIZE) {
             throw new IllegalArgumentException("이미지는 5MB 이하만 업로드 가능합니다.");
         }
@@ -166,19 +172,19 @@ public class ChatMessageService {
                             .build()
             );
 
-            // presigned URL 반환
             return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(minioProperties.getBucket_cloud())
                             .object(objectKey)
-                            .expiry(60 * 60 * 24) // 24시간
+                            .expiry(60 * 60 * 24)
                             .build()
             );
         } catch (Exception e) {
             throw new RuntimeException("파일 업로드 실패: " + e.getMessage());
         }
     }
+
     @Transactional
     public void deleteMessage(Long roomIdx, Long messageIdx, Long userIdx) {
         ChatMessages message = chatMessageRepository.findByIdxAndChatRoomsIdx(messageIdx, roomIdx)
@@ -200,8 +206,10 @@ public class ChatMessageService {
                         "messageType", "TEXT"
                 )
         );
+
         sendChatPreviewUpdate(roomIdx);
     }
+
     private void sendChatPreviewUpdate(Long roomIdx) {
         List<ChatParticipants> participants = participantsRepository.findAllByChatRoomsIdx(roomIdx);
 
@@ -218,7 +226,7 @@ public class ChatMessageService {
 
             String lastMsg = chatMessageRepository
                     .findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(roomIdx, joinedAt)
-                    .map(ChatMessages::getContents)
+                    .map(this::getPreviewMessage)
                     .orElse("메시지가 없습니다.");
 
             long unreadCount = chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
@@ -237,4 +245,12 @@ public class ChatMessageService {
         }
     }
 
+    private String getPreviewMessage(ChatMessages message) {
+        if (message.isDeleted()) return "삭제된 메시지입니다.";
+        if (message.getMessageType() == MessageType.IMAGE) return "사진";
+        if (message.getMessageType() == MessageType.FILE) return "문서";
+
+        String contents = message.getContents();
+        return (contents == null || contents.isBlank()) ? "메시지가 없습니다." : contents;
+    }
 }
