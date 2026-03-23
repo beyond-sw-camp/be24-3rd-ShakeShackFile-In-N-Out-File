@@ -85,5 +85,12 @@ public class ChatRoomController {
         chatRoomService.leaveRoom(roomIdx, user.getIdx());
         return ResponseEntity.ok().build();
     }
-    //수정
+
+    @PostMapping("/{roomIdx}/heartbeat")
+    public ResponseEntity heartbeat(
+            @PathVariable Long roomIdx,
+            @AuthenticationPrincipal AuthUserDetails user) {
+        chatRoomService.refreshRoomPresence(roomIdx, user.getIdx());
+        return ResponseEntity.ok().build();
+    }
 }

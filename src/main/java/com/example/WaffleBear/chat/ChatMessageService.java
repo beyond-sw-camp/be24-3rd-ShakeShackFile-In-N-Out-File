@@ -128,6 +128,8 @@ public class ChatMessageService {
 
         String profileImageUrl = featerService.resolveProfileImage(senderIdx);
         int messageUnreadCount = chatMessageRepository.countUnreadParticipants(roomIdx, message.getIdx(), senderIdx);
+        chatRoomService.evictChatListCachesByRoom(roomIdx);
+
         return ChatMessagesDto.ListRes.from(message, messageUnreadCount, profileImageUrl);
     }
 
@@ -146,6 +148,8 @@ public class ChatMessageService {
                             Map.of("type", "READ_UPDATE", "userIdx", userIdx)
                     );
                 });
+        chatRoomService.evictChatListCachesByRoom(roomIdx);
+
     }
 
     public String uploadFile(Long roomIdx, MultipartFile file, Long userIdx) {
@@ -195,6 +199,8 @@ public class ChatMessageService {
         }
 
         message.markDeleted();
+        refreshRoomLastMessage(message.getChatRooms());
+
 
         messagingTemplate.convertAndSend(
                 "/sub/chat/room/" + roomIdx,
@@ -207,6 +213,7 @@ public class ChatMessageService {
                 )
         );
 
+        chatRoomService.evictChatListCachesByRoom(roomIdx);
         sendChatPreviewUpdate(roomIdx);
     }
 
@@ -253,4 +260,12 @@ public class ChatMessageService {
         String contents = message.getContents();
         return (contents == null || contents.isBlank()) ? "메시지가 없습니다." : contents;
     }
+    private void refreshRoomLastMessage(ChatRooms room) {
+        chatMessageRepository.findTopByChatRoomsIdxOrderByCreatedAtDesc(room.getIdx())
+                .ifPresentOrElse(
+                        last -> room.updateLastMessage(getPreviewMessage(last), last.getCreatedAt()),
+                        () -> room.updateLastMessage("", null)
+                );
+    }
+
 }

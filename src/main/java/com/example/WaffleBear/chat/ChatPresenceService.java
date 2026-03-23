@@ -10,6 +10,8 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class ChatPresenceService {
 
+    private static final Duration TTL = Duration.ofMinutes(5);
+
     private final StringRedisTemplate redisTemplate;
 
     private String key(Long roomId, Long userId) {
@@ -17,7 +19,11 @@ public class ChatPresenceService {
     }
 
     public void enter(Long roomId, Long userId) {
-        redisTemplate.opsForValue().set(key(roomId, userId), "1", Duration.ofMinutes(5));
+        redisTemplate.opsForValue().set(key(roomId, userId), "1", TTL);
+    }
+
+    public void refresh(Long roomId, Long userId) {
+        redisTemplate.opsForValue().set(key(roomId, userId), "1", TTL);
     }
 
     public void leave(Long roomId, Long userId) {

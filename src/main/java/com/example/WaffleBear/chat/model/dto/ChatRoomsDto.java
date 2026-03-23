@@ -5,9 +5,7 @@ import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import com.example.WaffleBear.user.model.User;
 import jakarta.validation.constraints.NotEmpty;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
@@ -41,18 +39,26 @@ public class ChatRoomsDto {
     }
     @Getter
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class PageRes {
         private List<ListRes> boardList;
         private int totalPage;
         private long totalCount;
 
-        public static PageRes from(Page<ChatParticipants> result, Map<Long, Long> unreadMap, Map<Long, String> lastMessageMap) {
+        public static PageRes from(
+                Page<ChatParticipants> result,
+                Map<Long, Long> unreadMap,
+                Map<Long, String> lastMessageMap,
+                Map<Long, Long> participantCountMap
+        ) {
             return PageRes.builder()
                     .boardList(result.getContent().stream()
                             .map(p -> {
                                 long unread = unreadMap.getOrDefault(p.getChatRooms().getIdx(), 0L);
                                 String lastMessage = lastMessageMap.getOrDefault(p.getChatRooms().getIdx(), "");
-                                return ListRes.from(p, unread, lastMessage);
+                                long participantCount = participantCountMap.getOrDefault(p.getChatRooms().getIdx(), 0L);
+                                return ListRes.from(p, unread, lastMessage, participantCount);
                             })
                             .toList())
                     .totalPage(result.getTotalPages())
@@ -61,8 +67,10 @@ public class ChatRoomsDto {
         }
     }
 
-    @Builder
     @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ListRes {
         private Long idx;
         private String title;
@@ -72,7 +80,12 @@ public class ChatRoomsDto {
         private long unreadCount;
 
         // ChatParticipants 엔티티를 전달받아 데이터를 가공합니다.
-        public static ListRes from(ChatParticipants participant, long unreadCount, String lastMessage) {
+        public static ListRes from(
+                ChatParticipants participant,
+                long unreadCount,
+                String lastMessage,
+                long participantCount
+        ) {
             ChatRooms room = participant.getChatRooms();
             String displayName = (participant.getCustomRoomName() != null && !participant.getCustomRoomName().isEmpty())
                     ? participant.getCustomRoomName()
@@ -81,9 +94,9 @@ public class ChatRoomsDto {
             return ListRes.builder()
                     .idx(room.getIdx())
                     .title(displayName)
-                    .lastMessage(lastMessage) // ✅ 기존 room.getLastMessage() 대신
+                    .lastMessage(lastMessage)
                     .lastMessageTime(room.getLastMessageTime())
-                    .participantCount(room.getParticipants() != null ? room.getParticipants().size() : 0)
+                    .participantCount((int) participantCount)
                     .unreadCount(unreadCount)
                     .build();
         }

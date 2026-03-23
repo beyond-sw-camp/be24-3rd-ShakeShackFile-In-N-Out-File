@@ -8,7 +8,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,13 +24,32 @@ public interface ParticipantsRepository extends JpaRepository<ChatParticipants,L
 
     boolean existsByChatRoomsIdx(Long roomIdx);
 
-    @Query("SELECT cp FROM ChatParticipants cp JOIN cp.chatRooms cr WHERE cp.users.idx = :userIdx ORDER BY cr.lastMessageTime DESC NULLS LAST")
-    Page<ChatParticipants> findAllByUsersIdx(Long userIdx, PageRequest pageRequest);
+    @Query("""
+    SELECT cp
+    FROM ChatParticipants cp
+    JOIN cp.chatRooms cr
+    WHERE cp.users.idx = :userIdx
+    ORDER BY cr.lastMessageTime DESC NULLS LAST
+""")
+    Page<ChatParticipants> findAllByUsersIdx(Long userIdx, Pageable pageable);
 
     List<ChatParticipants> findAllByUsersIdx(Long userIdx);
     Optional<ChatParticipants> findByChatRoomsIdxAndUsersIdx(Long roomIdx, Long userIdx);
 
     @Query("select cp from ChatParticipants cp join fetch cp.users u where cp.chatRooms.idx = :roomIdx")
     List<ChatParticipants> findAllByChatRoomsIdx(Long roomIdx);
-    //복구
+
+    public interface RoomParticipantCountView {
+        Long getRoomIdx();
+        Long getParticipantCount();
+    }
+
+    @Query("""
+    SELECT cp.chatRooms.idx as roomIdx, COUNT(cp) as participantCount
+    FROM ChatParticipants cp
+    WHERE cp.chatRooms.idx IN :roomIds
+    GROUP BY cp.chatRooms.idx
+""")
+    List<RoomParticipantCountView> countParticipantsByRoomIds(@Param("roomIds") Collection<Long> roomIds);
+
 }

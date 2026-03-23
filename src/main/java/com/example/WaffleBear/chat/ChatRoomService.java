@@ -9,12 +9,9 @@ import com.example.WaffleBear.chat.model.entity.MessageType;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.user.model.User;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,8 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Pageable;
 
 @Service
 
@@ -38,18 +35,22 @@ public class ChatRoomService {
     private final ChatMessageRepository chatMessageRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatPresenceService chatPresenceService;
+    private final ChatListCacheService chatListCacheService;
+
     public ChatRoomService(ChatRoomRepository chatRoomRepository,
                            UserRepository userRepository,
                            ParticipantsRepository participantsRepository,
                            ChatMessageRepository chatMessageRepository,
                            @Lazy SimpMessagingTemplate messagingTemplate,
-                            ChatPresenceService chatPresenceService) {
+                            ChatPresenceService chatPresenceService,
+                           ChatListCacheService chatListCacheService) {
         this.chatRoomRepository = chatRoomRepository;
         this.userRepository = userRepository;
         this.participantsRepository = participantsRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.messagingTemplate = messagingTemplate;
         this.chatPresenceService = chatPresenceService;
+        this.chatListCacheService = chatListCacheService;
     }
 
 
@@ -85,6 +86,7 @@ public class ChatRoomService {
                 }
             }
             this.addParticipantsToRoom(room, invitees);
+            evictChatListCachesByRoom(room.getIdx());
             return room.getIdx();
         }
 
@@ -115,6 +117,7 @@ public class ChatRoomService {
         for (User user : foundUsers) {
             sendSystemMessage(roomId, user.getName() + "님이 입장했습니다.", MessageType.ENTER);
         }
+        evictChatListCachesByRoom(roomId);
     }
 
     // [개선된 공통 로직] 중복 방지 강화
@@ -149,6 +152,7 @@ public class ChatRoomService {
         newUsers.forEach(user ->
                 sendSystemMessage(roomId, user.getName() + "님이 입장했습니다.", MessageType.ENTER)
         );
+        evictChatListCachesByRoom(roomId);
         return newUsers.size();
     }
 
@@ -169,56 +173,72 @@ public class ChatRoomService {
 
 
     public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
-        List<ChatParticipants> sorted = participantsRepository.findAllByUsersIdx(userIdx)
-                .stream()
-                .sorted((a, b) -> {
-                    LocalDateTime timeA = a.getChatRooms().getLastMessageTime();
-                    LocalDateTime timeB = b.getChatRooms().getLastMessageTime();
-                    if (timeA == null) return 1;
-                    if (timeB == null) return -1;
-                    return timeB.compareTo(timeA);
-                })
+        ChatRoomsDto.PageRes cached = chatListCacheService.get(userIdx, page, size);
+        if (cached != null) {
+            return cached;
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ChatParticipants> result = participantsRepository.findAllByUsersIdx(userIdx, pageable);
+        List<ChatParticipants> pageItems = result.getContent();
+
+        List<Long> roomIds = pageItems.stream()
+                .map(p -> p.getChatRooms().getIdx())
+                .distinct()
                 .toList();
-        Map<Long, Long> unreadMap = sorted.stream()
+
+        Map<Long, Long> participantCountMap = participantsRepository.countParticipantsByRoomIds(roomIds).stream()
                 .collect(Collectors.toMap(
-                        p -> p.getChatRooms().getIdx(),
-                        p -> {// ✅ lastReadMessageId 기준 AND joinedAt 이후 메시지만 카운트
-                                Long lastReadId = p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L;
-        LocalDateTime joinedAt = p.getJoinedAt() != null
-                ? p.getJoinedAt()
-                : LocalDateTime.of(2000, 1, 1, 0, 0);
+                        ParticipantsRepository.RoomParticipantCountView::getRoomIdx,
+                        ParticipantsRepository.RoomParticipantCountView::getParticipantCount
+                ));
 
-        return chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
-                p.getChatRooms().getIdx(),
-                lastReadId,
-                joinedAt
-        );
-    }
-            ));
-
-        // ✅ joinedAt 이후 메시지가 있는지 확인해서 lastMessage 덮어쓰기
-        Map<Long, String> lastMessageMap = sorted.stream()
+        Map<Long, Long> unreadMap = pageItems.stream()
                 .collect(Collectors.toMap(
                         p -> p.getChatRooms().getIdx(),
                         p -> {
+                            Long lastReadId = p.getLastReadMessageId() != null ? p.getLastReadMessageId() : 0L;
                             LocalDateTime joinedAt = p.getJoinedAt() != null
                                     ? p.getJoinedAt()
                                     : LocalDateTime.of(2000, 1, 1, 0, 0);
-                            return chatMessageRepository
-                                    .findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(
-                                            p.getChatRooms().getIdx(), joinedAt)
-                                    .map(this::getPreviewMessage)
-                                    .orElse(""); // ✅ joinedAt 이전 메시지면 빈 문자열
+
+                            return chatMessageRepository.countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
+                                    p.getChatRooms().getIdx(),
+                                    lastReadId,
+                                    joinedAt
+                            );
                         }
                 ));
 
-    int start = page * size;
-    int end = Math.min(start + size, sorted.size());
-    List<ChatParticipants> paged = sorted.subList(start, end);
-    Page<ChatParticipants> result = new PageImpl<>(paged, PageRequest.of(page, size), sorted.size());
+        Map<Long, String> lastMessageMap = pageItems.stream()
+                .collect(Collectors.toMap(
+                        p -> p.getChatRooms().getIdx(),
+                        p -> {
+                            ChatRooms room = p.getChatRooms();
+                            LocalDateTime joinedAt = p.getJoinedAt() != null
+                                    ? p.getJoinedAt()
+                                    : LocalDateTime.of(2000, 1, 1, 0, 0);
 
-    return ChatRoomsDto.PageRes.from(result, unreadMap, lastMessageMap);
-}
+                            if (room.getLastMessageTime() == null || room.getLastMessageTime().isBefore(joinedAt)) {
+                                return "";
+                            }
+
+                            return room.getLastMessage() == null ? "" : room.getLastMessage();
+                        }
+                ));
+
+        ChatRoomsDto.PageRes response = ChatRoomsDto.PageRes.from(
+                result,
+                unreadMap,
+                lastMessageMap,
+                participantCountMap
+        );
+
+        chatListCacheService.put(userIdx, page, size, response);
+        return response;
+    }
+
+
     private String getPreviewMessage(ChatMessages message) {
         if (message == null) return "메시지가 없습니다.";
         if (message.isDeleted()) return "삭제된 메시지입니다.";
@@ -234,22 +254,28 @@ public class ChatRoomService {
     public void exit(Long roomIdx, Long userIdx) {
         User user = userRepository.findById(userIdx)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. idx: " + userIdx));
-        String name = user.getName();
-        // 1. 해당 방에서 내가 참여자인지 확인하고 삭제
+
+        List<Long> affectedUserIds = participantsRepository.findAllByChatRoomsIdx(roomIdx).stream()
+                .map(p -> p.getUsers().getIdx())
+                .distinct()
+                .toList();
+
+        chatPresenceService.leave(roomIdx, userIdx);
+
         participantsRepository.deleteByChatRoomsIdxAndUsersIdx(roomIdx, userIdx);
         participantsRepository.flush();
-        // 2. 방에 남은 사람이 더 이상 없는지 확인
+
         if (!participantsRepository.existsByChatRoomsIdx(roomIdx)) {
-            // 3. (중요) 해당 방의 메시지를 먼저 삭제해야 외래키 오류가 안 남
             chatMessageRepository.deleteAllByChatRoomsIdx(roomIdx);
-            chatMessageRepository.flush(); // DB에 즉시 반영
-            // 4. 마지막으로 방 삭제
+            chatMessageRepository.flush();
             chatRoomRepository.deleteById(roomIdx);
-        }else {
-            // ✅ 방이 아직 존재할 때만 퇴장 메시지 전송
-            sendSystemMessage(roomIdx, name + "님이 채팅방을 떠났습니다.", MessageType.EXIT);
+        } else {
+            sendSystemMessage(roomIdx, user.getName() + "님이 채팅방을 나갔습니다.", MessageType.EXIT);
         }
+
+        chatListCacheService.evictUsers(affectedUserIds);
     }
+
     public boolean isMember(Long roomId, Long userIdx) {
         return participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomId, userIdx);
     }
@@ -260,15 +286,42 @@ public class ChatRoomService {
                 .orElseThrow(() -> new IllegalArgumentException("해당 채팅방 참여 정보를 찾을 수 없습니다."));
 
         participant.setCustomRoomName(newTitle);
+        evictChatListCachesByRoom(roomIdx);
     }
     public void enterRoom(Long roomIdx, Long userIdx) {
+        validateRoomMembership(roomIdx, userIdx);
         chatPresenceService.enter(roomIdx, userIdx);
     }
+
     public void leaveRoom(Long roomIdx, Long userIdx) {
+        validateRoomMembership(roomIdx, userIdx);
         chatPresenceService.leave(roomIdx, userIdx);
+    }
+
+    public void refreshRoomPresence(Long roomIdx, Long userIdx) {
+        validateRoomMembership(roomIdx, userIdx);
+        chatPresenceService.refresh(roomIdx, userIdx);
     }
     public boolean isActiveInRoom(Long roomIdx, Long userIdx) {
         return chatPresenceService.isActiveInRoom(roomIdx, userIdx);
     }
+    public void evictChatListCachesByRoom(Long roomIdx) {
+        List<Long> userIds = participantsRepository.findAllByChatRoomsIdx(roomIdx).stream()
+                .map(p -> p.getUsers().getIdx())
+                .distinct()
+                .toList();
+
+        chatListCacheService.evictUsers(userIds);
+    }
+
+    public void evictChatListCachesByUsers(Collection<Long> userIds) {
+        chatListCacheService.evictUsers(userIds);
+    }
+    private void validateRoomMembership(Long roomIdx, Long userIdx) {
+        if (!participantsRepository.existsByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)) {
+            throw new IllegalArgumentException("해당 채팅방 접근 권한이 없습니다.");
+        }
+    }
+
 
 }
