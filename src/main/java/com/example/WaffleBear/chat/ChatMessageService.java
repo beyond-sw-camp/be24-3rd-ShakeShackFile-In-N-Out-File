@@ -233,7 +233,7 @@ public class ChatMessageService {
                     "unreadCount", unreadCount
             );
 
-            sseService.sendToUser(userIdx, "chat-preview-update", payload);
+            sseService.sendEventToUser(userIdx, "chat-preview-update", payload);
         }
     }
 

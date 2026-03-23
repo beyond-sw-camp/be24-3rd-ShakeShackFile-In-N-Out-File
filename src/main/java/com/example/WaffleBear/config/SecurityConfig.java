@@ -54,7 +54,7 @@ public class SecurityConfig {
         // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers("/administrator/**").hasAuthority("ROLE_ADMIN")
-                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue", "/auth/logout", "/ws-stomp/**", "/notification/subscribe","/sse/connect").permitAll()
+                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue", "/auth/logout", "/ws-stomp/**", "/notification/subscribe", "/api/sse/**", "/sse/**").permitAll()
                 .anyRequest().authenticated()
         );
 
