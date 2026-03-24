@@ -1,11 +1,17 @@
 package com.example.WaffleBear.user.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
 import java.util.Map;
 
 public class UserDto {
-    public record SignupReq(String email, String name, String password) {
+    @Schema(description = "회원가입 요청")
+    public record SignupReq(
+            @Schema(description = "이메일 주소", example = "user@example.com") String email,
+            @Schema(description = "사용자 이름", example = "홍길동") String name,
+            @Schema(description = "비밀번호 (영문+숫자+특수문자 조합 권장)", example = "Qwer1234%") String password
+    ) {
         public User toEntity() {
             return User.builder()
                     .email(email)
@@ -18,8 +24,13 @@ public class UserDto {
         }
     }
 
+    @Schema(description = "회원가입 응답")
     @Builder
-    public record SignupRes(Long idx, String email, String name) {
+    public record SignupRes(
+            @Schema(description = "사용자 고유 번호", example = "1") Long idx,
+            @Schema(description = "이메일 주소", example = "user@example.com") String email,
+            @Schema(description = "사용자 이름", example = "홍길동") String name
+    ) {
         public static SignupRes from(User entity) {
             return SignupRes.builder()
                     .idx(entity.getIdx())
@@ -29,8 +40,15 @@ public class UserDto {
         }
     }
 
+    @Schema(description = "OAuth2 소셜 로그인 정보")
     @Builder
-    public record OAuth(String email, String name, String provider, boolean enable, String role) {
+    public record OAuth(
+            @Schema(description = "이메일 주소") String email,
+            @Schema(description = "사용자 이름") String name,
+            @Schema(description = "OAuth 제공자 (google/naver/kakao)") String provider,
+            @Schema(description = "계정 활성화 여부") boolean enable,
+            @Schema(description = "사용자 권한") String role
+    ) {
         public static OAuth from(Map<String, Object> attributes, String provider) {
             if (provider.equals("google")) {
                 String email = (String) attributes.get("email");
@@ -82,6 +100,11 @@ public class UserDto {
         }
     }
 
-    public record LoginReq(String email, String name, String password) {
+    @Schema(description = "로그인 요청")
+    public record LoginReq(
+            @Schema(description = "이메일 주소", example = "user@example.com") String email,
+            @Schema(description = "사용자 이름 (선택)", example = "홍길동") String name,
+            @Schema(description = "비밀번호", example = "Qwer1234%") String password
+    ) {
     }
 }
