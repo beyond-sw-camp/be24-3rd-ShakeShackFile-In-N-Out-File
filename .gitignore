@@ -40,3 +40,7 @@ out/
 
 keystore.p12
 keystore.p12
+
+# Claude related files
+CLAUDE.md
+.claude/
