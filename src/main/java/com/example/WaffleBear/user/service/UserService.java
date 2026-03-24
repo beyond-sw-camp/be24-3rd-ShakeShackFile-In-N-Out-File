@@ -40,7 +40,7 @@ public class UserService implements UserDetailsService {
         emailVerifyRepository.save(new EmailVerify(token, user.getEmail()));
 
         userRepository.save(user);
-        emailVerifyService.sendVerificationEmail(user.getEmail(), token);
+
 
         return UserDto.SignupRes.from(user);
     }
