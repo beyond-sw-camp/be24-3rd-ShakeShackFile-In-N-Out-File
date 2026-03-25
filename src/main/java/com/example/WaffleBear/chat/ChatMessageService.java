@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +34,12 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class ChatMessageService {
+    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;
+    private static final Set<String> IMAGE_TYPES = Set.of(
+            "image/png", "image/jpeg", "image/jpg"
+    );
+
     private final SseService sseService;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatRoomRepository chatRoomRepository;
@@ -44,12 +51,6 @@ public class ChatMessageService {
     private final FeaterService featerService;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
-
-    private static final long MAX_IMAGE_SIZE = 5L * 1024 * 1024;
-    private static final long MAX_FILE_SIZE = 30L * 1024 * 1024;
-    private static final Set<String> IMAGE_TYPES = Set.of(
-            "image/png", "image/jpeg", "image/jpg"
-    );
 
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
@@ -68,12 +69,14 @@ public class ChatMessageService {
         Page<ChatMessages> result = chatMessageRepository
                 .findAllByChatRoomsAndCreatedAtAfter(room, joinedAt, pageable);
 
+        Map<Long, Integer> unreadCountMap = loadUnreadCountMap(roomIdx, result.getContent());
+        Map<Long, String> profileImageCache = new HashMap<>();
+
         List<ChatMessagesDto.ListRes> messageList = result.getContent().stream()
                 .map(msg -> {
-                    int messageUnreadCount = chatMessageRepository.countUnreadParticipants(
-                            roomIdx, msg.getIdx(), msg.getSender().getIdx()
-                    );
-                    String profileImageUrl = featerService.resolveProfileImage(msg.getSender().getIdx());
+                    Long senderIdx = msg.getSender().getIdx();
+                    int messageUnreadCount = unreadCountMap.getOrDefault(msg.getIdx(), 0);
+                    String profileImageUrl = getCachedProfileImage(profileImageCache, senderIdx);
                     return ChatMessagesDto.ListRes.from(msg, messageUnreadCount, profileImageUrl);
                 })
                 .toList();
@@ -87,12 +90,38 @@ public class ChatMessageService {
                 .build();
     }
 
+    private Map<Long, Integer> loadUnreadCountMap(Long roomIdx, List<ChatMessages> messages) {
+        if (messages.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> messageIds = messages.stream()
+                .map(ChatMessages::getIdx)
+                .toList();
+
+        Map<Long, Integer> unreadCountMap = new HashMap<>();
+        for (Object[] row : chatMessageRepository.countUnreadParticipantsByMessageIds(roomIdx, messageIds)) {
+            unreadCountMap.put(((Number) row[0]).longValue(), ((Number) row[1]).intValue());
+        }
+        return unreadCountMap;
+    }
+
+    private String getCachedProfileImage(Map<Long, String> cache, Long senderIdx) {
+        if (cache.containsKey(senderIdx)) {
+            return cache.get(senderIdx);
+        }
+
+        String profileImageUrl = featerService.resolveProfileImage(senderIdx);
+        cache.put(senderIdx, profileImageUrl);
+        return profileImageUrl;
+    }
+
     @Transactional
     public ChatMessagesDto.ListRes saveMessage(Long roomIdx, ChatMessagesDto.Send req, Long senderIdx) {
         ChatRooms room = chatRoomRepository.findByIdWithLock(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
         User user = userRepository.findById(senderIdx)
-                .orElseThrow(() -> new RuntimeException("유저를 찾을 수 없습니다."));
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
         ChatMessages message = chatMessageRepository.save(req.toEntity(room, user));
         String previewMessage = getPreviewMessage(message);
@@ -135,7 +164,7 @@ public class ChatMessageService {
     public void markAsRead(Long roomIdx, Long userIdx) {
         ChatParticipants participant = participantsRepository
                 .findByChatRoomsIdxAndUsersIdx(roomIdx, userIdx)
-                .orElseThrow(() -> new RuntimeException("참여자 정보 없음"));
+                .orElseThrow(() -> new RuntimeException("참여자 정보를 찾을 수 없습니다."));
 
         chatMessageRepository.findTopByChatRoomsIdxOrderByCreatedAtDesc(roomIdx)
                 .ifPresent(msg -> {

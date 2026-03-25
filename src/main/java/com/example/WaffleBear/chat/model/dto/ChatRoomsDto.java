@@ -53,13 +53,18 @@ public class ChatRoomsDto {
         @Schema(description = "전체 채팅방 수", example = "50")
         private long totalCount;
 
-        public static PageRes from(Page<ChatParticipants> result, Map<Long, Long> unreadMap, Map<Long, String> lastMessageMap) {
+        public static PageRes from(Page<ChatParticipants> result,
+                                   Map<Long, Long> unreadMap,
+                                   Map<Long, String> lastMessageMap,
+                                   Map<Long, Integer> participantCountMap) {
             return PageRes.builder()
                     .boardList(result.getContent().stream()
                             .map(p -> {
-                                long unread = unreadMap.getOrDefault(p.getChatRooms().getIdx(), 0L);
-                                String lastMessage = lastMessageMap.getOrDefault(p.getChatRooms().getIdx(), "");
-                                return ListRes.from(p, unread, lastMessage);
+                                Long roomIdx = p.getChatRooms().getIdx();
+                                long unread = unreadMap.getOrDefault(roomIdx, 0L);
+                                String lastMessage = lastMessageMap.getOrDefault(roomIdx, "");
+                                int participantCount = participantCountMap.getOrDefault(roomIdx, 0);
+                                return ListRes.from(p, unread, lastMessage, participantCount);
                             })
                             .toList())
                     .totalPage(result.getTotalPages())
@@ -85,7 +90,10 @@ public class ChatRoomsDto {
         @Schema(description = "읽지 않은 메시지 수", example = "3")
         private long unreadCount;
 
-        public static ListRes from(ChatParticipants participant, long unreadCount, String lastMessage) {
+        public static ListRes from(ChatParticipants participant,
+                                   long unreadCount,
+                                   String lastMessage,
+                                   int participantCount) {
             ChatRooms room = participant.getChatRooms();
             String displayName = (participant.getCustomRoomName() != null && !participant.getCustomRoomName().isEmpty())
                     ? participant.getCustomRoomName()
@@ -96,7 +104,7 @@ public class ChatRoomsDto {
                     .title(displayName)
                     .lastMessage(lastMessage)
                     .lastMessageTime(room.getLastMessageTime())
-                    .participantCount(room.getParticipants() != null ? room.getParticipants().size() : 0)
+                    .participantCount(participantCount)
                     .unreadCount(unreadCount)
                     .build();
         }
