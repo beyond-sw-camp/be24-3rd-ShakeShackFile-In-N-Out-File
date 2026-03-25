@@ -147,9 +147,11 @@ nginx로 설정하실 경우
 }
 server {
     listen 443 ssl;
-    server_name fileinnout.kro.kr www.fileinnout.kro.kr;
+    server_name [백엔드 주소]
+    //SSL 인증서
     ssl_certificate /etc/nginx/ssl/fullchain.crt;
     ssl_certificate_key /etc/nginx/ssl/private.key;
+
     root /var/www/html;
     index index.html;
     location / {
@@ -180,6 +182,15 @@ proxy_pass http://127.0.0.1:1234;
 이 부분은 실시간 커서 및 워크스페이스 동기화를 쓰기 위한 웹소켓의 주소입니다.
 백엔드나 혹은 다른 서버를 구현하신다면 그 주소로 해야합니다. 저희 프로젝트의 경우
 프론트랑 같이 구동하는 구조로 만들었습니다.
+
+yjs 웹소켓을 사용할 서버에는 node를 설치하셔야 합니다.
+그 후에
+
+```
+$env:HOST='0.0.0.0'; $env:PORT='1234'; npx y-websocket
+리눅스 : HOST=0.0.0.0 PORT=1234 npx y-websocket
+```
+이런식으로 y-websocket을 실행해주시면 됩니다.
 
 </details>
 
