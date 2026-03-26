@@ -29,6 +29,7 @@ public class ChatParticipants {
     private String customRoomName;
 
     // 알림 설정이나 즐겨찾기 관리
+    @Transient
     private boolean isFavorite;
 
     /** 참여 시점: 이 시간 이후의 메시지만 노출 */

@@ -18,6 +18,7 @@ public class ChatRooms {
     private LocalDateTime createdAt;
     @Setter
     private String title;
+    @Transient
     private String lastMessage;
     private LocalDateTime lastMessageTime;
 

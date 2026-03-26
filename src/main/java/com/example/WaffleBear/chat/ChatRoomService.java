@@ -223,7 +223,10 @@ public class ChatRoomService {
                                 return "";
                             }
 
-                            return room.getLastMessage() == null ? "" : room.getLastMessage();
+                            return chatMessageRepository
+                                    .findTopByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtDesc(room.getIdx(), joinedAt)
+                                    .map(this::getPreviewMessage)
+                                    .orElse("");
                         }
                 ));
 
