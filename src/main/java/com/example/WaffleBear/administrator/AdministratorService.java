@@ -13,6 +13,7 @@ import com.example.WaffleBear.user.model.UserAccountStatus;
 import com.example.WaffleBear.user.repository.RefreshTokenRepository;
 import com.example.WaffleBear.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,11 +36,8 @@ public class AdministratorService {
     public AdministratorDto.DashboardRes getDashboard(AuthUserDetails adminUser) {
         validateAdministrator(adminUser);
 
-        List<User> users = userRepository.findAll().stream()
-                .sorted(Comparator.comparing(User::getIdx, Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-        List<FileInfo> files = fileUpDownloadRepository.findAll();
-        Map<Long, UserFileStat> statsByUserIdx = aggregateUserFileStats(files);
+        List<User> users = userRepository.findAll(Sort.by(Sort.Order.desc("idx")));
+        Map<Long, UserFileStat> statsByUserIdx = loadDashboardStatsByUser();
 
         long totalUsers = users.size();
         long activeUsers = users.stream().filter(this::isActiveAccount).count();
@@ -101,8 +99,7 @@ public class AdministratorService {
           refreshTokenRepository.deleteByEmail(targetUser.getEmail());
         }
 
-        UserFileStat stat = aggregateUserFileStats(fileUpDownloadRepository.findAllByUser_Idx(targetUser.getIdx()))
-                .getOrDefault(targetUser.getIdx(), UserFileStat.empty());
+        UserFileStat stat = loadDashboardStat(targetUser.getIdx());
         return toUserResponse(targetUser, stat);
     }
 
@@ -171,22 +168,41 @@ public class AdministratorService {
                 .toList();
     }
 
-    private Map<Long, UserFileStat> aggregateUserFileStats(List<FileInfo> files) {
+    private Map<Long, UserFileStat> loadDashboardStatsByUser() {
         Map<Long, UserFileStat> statsByUserIdx = new HashMap<>();
+        fileUpDownloadRepository.aggregateDashboardStatsByUser(FileNodeType.FOLDER)
+                .forEach(row -> {
+                    Long userIdx = row.getUserIdx();
+                    if (userIdx == null) {
+                        return;
+                    }
 
-        for (FileInfo file : files) {
-            if (file.getUser() == null || file.getUser().getIdx() == null) {
-                continue;
-            }
+                    statsByUserIdx.put(userIdx, toUserFileStat(row));
+                });
+        return statsByUserIdx;
+    }
 
-            UserFileStat stat = statsByUserIdx.computeIfAbsent(file.getUser().getIdx(), ignored -> UserFileStat.empty());
-            FileNodeType nodeType = resolveNodeType(file);
-            long sizeBytes = nodeType == FileNodeType.FILE ? Math.max(0L, file.getFileSize() == null ? 0L : file.getFileSize()) : 0L;
-            boolean shared = file.isSharedFile();
-            statsByUserIdx.put(file.getUser().getIdx(), stat.add(nodeType, sizeBytes, shared));
+    private UserFileStat loadDashboardStat(Long userIdx) {
+        if (userIdx == null) {
+            return UserFileStat.empty();
         }
 
-        return statsByUserIdx;
+        return fileUpDownloadRepository.aggregateDashboardStatsForUser(userIdx, FileNodeType.FOLDER)
+                .map(this::toUserFileStat)
+                .orElseGet(UserFileStat::empty);
+    }
+
+    private UserFileStat toUserFileStat(FileUpDownloadRepository.UserDashboardStatProjection row) {
+        if (row == null) {
+            return UserFileStat.empty();
+        }
+
+        return new UserFileStat(
+                Math.max(0L, row.getFileCount() == null ? 0L : row.getFileCount()),
+                Math.max(0L, row.getFolderCount() == null ? 0L : row.getFolderCount()),
+                Math.max(0L, row.getUsedBytes() == null ? 0L : row.getUsedBytes()),
+                Math.max(0L, row.getSharedFileCount() == null ? 0L : row.getSharedFileCount())
+        );
     }
 
     private AdministratorDto.UserRes toUserResponse(User user, UserFileStat stat) {
@@ -207,10 +223,6 @@ public class AdministratorService {
                 .folderCount(stat.folderCount())
                 .sharedFileCount(stat.sharedFileCount())
                 .build();
-    }
-
-    private FileNodeType resolveNodeType(FileInfo file) {
-        return file.getNodeType() == null ? FileNodeType.FILE : file.getNodeType();
     }
 
     private String resolveUserId(User user) {
@@ -248,13 +260,6 @@ public class AdministratorService {
     private record UserFileStat(long fileCount, long folderCount, long usedBytes, long sharedFileCount) {
         private static UserFileStat empty() {
             return new UserFileStat(0L, 0L, 0L, 0L);
-        }
-
-        private UserFileStat add(FileNodeType nodeType, long sizeBytes, boolean shared) {
-            if (nodeType == FileNodeType.FOLDER) {
-                return new UserFileStat(fileCount, folderCount + 1, usedBytes, sharedFileCount);
-            }
-            return new UserFileStat(fileCount + 1, folderCount, usedBytes + sizeBytes, shared ? sharedFileCount + 1 : sharedFileCount);
         }
     }
 

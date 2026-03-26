@@ -18,6 +18,10 @@ public class FileManageService {
         return fileUpDownloadService.fileList(userIdx);
     }
 
+    public FileCommonDto.FileListPageRes listPage(Long userIdx, FileManageDto.ListPageReq request) {
+        return fileUpDownloadService.fileListPage(userIdx, request);
+    }
+
     public FileCommonDto.FileListItemRes createFolder(Long userIdx, FileManageDto.FolderReq request) {
         return fileUpDownloadService.createFolder(userIdx, request);
     }
@@ -52,5 +56,13 @@ public class FileManageService {
 
     public FileCommonDto.FileActionRes restoreFilesFromTrash(Long userIdx, List<Long> fileIdxList) {
         return fileUpDownloadService.restoreFilesFromTrash(userIdx, fileIdxList);
+    }
+
+    public FileCommonDto.FileDownloadPayload downloadFile(Long userIdx, Long fileIdx) {
+        return fileUpDownloadService.downloadFile(userIdx, fileIdx);
+    }
+
+    public String getDownloadUrl(Long userIdx, Long fileIdx) {
+        return fileUpDownloadService.getDownloadUrl(userIdx, fileIdx);
     }
 }

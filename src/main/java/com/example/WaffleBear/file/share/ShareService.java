@@ -22,9 +22,11 @@ import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -367,6 +369,41 @@ public class ShareService {
         }
     }
 
+    public FileCommonDto.FileDownloadPayload downloadSharedFile(Long userIdx, Long fileIdx) {
+        requireAuthenticated(userIdx);
+        FileInfo file = getSharedRecord(userIdx, fileIdx).getFile();
+        ensureAccessibleSharedFile(file);
+
+        String objectKey = file.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        return new FileCommonDto.FileDownloadPayload(
+                readObjectBytes(minioProperties.getBucket_cloud(), objectKey),
+                resolveDownloadContentType(file.getFileOriginName()),
+                sanitizeDownloadFileName(file.getFileOriginName(), file.getFileSaveName()),
+                file.getFileSize()
+        );
+    }
+
+    public String getSharedFileDownloadUrl(Long userIdx, Long fileIdx) {
+        requireAuthenticated(userIdx);
+        FileInfo file = getSharedRecord(userIdx, fileIdx).getFile();
+        ensureAccessibleSharedFile(file);
+
+        String objectKey = file.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        return generateAttachmentDownloadUrl(
+                objectKey,
+                sanitizeDownloadFileName(file.getFileOriginName(), file.getFileSaveName()),
+                resolveDownloadContentType(file.getFileOriginName())
+        );
+    }
+
     private void requireAuthenticated(Long userIdx) {
         if (userIdx == null || userIdx <= 0L) {
             throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
@@ -602,8 +639,8 @@ public class ShareService {
         ).contains(extension);
     }
 
-    private String resolveTextContentType(String fileFormat) {
-        String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
+private String resolveTextContentType(String fileFormat) {
+    String extension = fileFormat == null ? "" : fileFormat.trim().toLowerCase(Locale.ROOT);
 
         if (Set.of("json").contains(extension)) {
             return "application/json";
@@ -616,12 +653,77 @@ public class ShareService {
         }
         if (Set.of("csv").contains(extension)) {
             return "text/csv";
-        }
-        return "text/plain";
     }
+    return "text/plain";
+}
 
-    private FileNodeType resolveNodeType(FileInfo entity) {
-        return entity.getNodeType() == null ? FileNodeType.FILE : entity.getNodeType();
+private byte[] readObjectBytes(String bucketName, String objectKey) {
+    try (var objectStream = minioClient.getObject(
+            GetObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(objectKey)
+                    .build()
+    )) {
+        return objectStream.readAllBytes();
+    } catch (Exception exception) {
+        throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
     }
 }
 
+private String generateAttachmentDownloadUrl(String objectKey, String fileName, String contentType) {
+    if (objectKey == null || objectKey.isBlank()) {
+        throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+    }
+
+    try {
+        Map<String, String> queryParams = new LinkedHashMap<>();
+        queryParams.put(
+                "response-content-disposition",
+                ContentDisposition.attachment()
+                        .filename(fileName, StandardCharsets.UTF_8)
+                        .build()
+                        .toString()
+        );
+        queryParams.put(
+                "response-content-type",
+                (contentType == null || contentType.isBlank())
+                        ? resolveDownloadContentType(fileName)
+                        : contentType
+        );
+
+        return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                .method(Method.GET)
+                .bucket(minioProperties.getBucket_cloud())
+                .object(objectKey)
+                .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                .extraQueryParams(queryParams)
+                .build());
+    } catch (Exception exception) {
+        throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+    }
+}
+
+private String resolveDownloadContentType(String fileName) {
+    String contentType = URLConnection.guessContentTypeFromName(fileName == null ? "" : fileName);
+    return (contentType == null || contentType.isBlank()) ? "application/octet-stream" : contentType;
+}
+
+private String sanitizeDownloadFileName(String preferredName, String fallbackName) {
+    String candidate = preferredName;
+    if (candidate == null || candidate.isBlank()) {
+        candidate = fallbackName;
+    }
+    if (candidate == null || candidate.isBlank()) {
+        candidate = "file";
+    }
+
+    return candidate
+            .replace("\r", "")
+            .replace("\n", "")
+            .trim();
+}
+
+private FileNodeType resolveNodeType(FileInfo entity) {
+    return entity.getNodeType() == null ? FileNodeType.FILE : entity.getNodeType();
+}
+}

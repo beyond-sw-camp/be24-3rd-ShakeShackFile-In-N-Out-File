@@ -56,6 +56,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
         // 2. Authorization 헤더가 없거나 Bearer 접두사가 아니면 검증 종료 (다음 필터로)
         if (authorization == null || !authorization.startsWith("Bearer ")) {
+            System.out.println("DEBUG: Authorization 헤더가 없거나 형식이 틀림: " + authorization);
             filterChain.doFilter(request, response);
             return;
         }

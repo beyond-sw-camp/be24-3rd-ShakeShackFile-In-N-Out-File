@@ -5,11 +5,11 @@ import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.file.dto.FileCommonDto;
 import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetDto;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,26 +22,27 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-@Tag(name = "워크스페이스 에셋 (WorkspaceAsset)", description = "워크스페이스 첨부파일 업로드, 조회, 삭제, 드라이브 저장 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/workspace")
+@Tag(name = "Workspace Assets", description = "Workspace attachment APIs")
+@SecurityRequirement(name = "bearerAuth")
 public class WorkspaceAssetController {
 
     private final WorkspaceAssetService workspaceAssetService;
 
-    @Operation(summary = "에셋 목록 조회", description = "워크스페이스에 첨부된 에셋(파일) 목록을 조회합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "조회 성공"),
-            @ApiResponse(responseCode = "404", description = "워크스페이스를 찾을 수 없음")
-    })
+    /**
+     * 에셋 목록 조회
+     */
     @GetMapping("/{workspaceId}/assets")
+    @Operation(summary = "List workspace assets", description = "Returns assets attached to a workspace.")
     public ResponseEntity<List<WorkspaceAssetDto.AssetRes>> listAssets(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUserDetails user,
-            @Parameter(description = "워크스페이스 ID", example = "1") @PathVariable Long workspaceId
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId
     ) {
         return ResponseEntity.ok(
                 workspaceAssetService.listAssets(
@@ -51,37 +52,32 @@ public class WorkspaceAssetController {
         );
     }
 
-    @Operation(summary = "에셋 업로드", description = "워크스페이스에 여러 파일을 업로드합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "업로드 성공"),
-            @ApiResponse(responseCode = "400", description = "잘못된 파일")
-    })
+    /**
+     * 여러 파일 업로드 (일반 에셋용)
+     */
     @PostMapping("/{workspaceId}/assets")
+    @Operation(summary = "Upload workspace assets", description = "Uploads one or more regular workspace assets.")
     public BaseResponse<?> uploadWorkspaceAssets(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUserDetails user,
-            @Parameter(description = "워크스페이스 ID", example = "1") @PathVariable Long workspaceId,
-            @Parameter(description = "업로드할 파일들") @RequestParam("files") MultipartFile[] files
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @RequestParam("files") MultipartFile[] files
     ) {
         List<WorkspaceAssetDto.AssetRes> result = workspaceAssetService.uploadWorkspaceAssets(
                 user.getIdx(),
                 workspaceId,
                 files
         );
-        return BaseResponse.success(result);
+        return BaseResponse.success(result);  // ✅ BaseResponse로 감싸기
     }
 
-    @Operation(summary = "EditorJS 이미지 업로드", description = "EditorJS 에디터에서 사용할 이미지를 업로드합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "이미지 업로드 성공"),
-            @ApiResponse(responseCode = "400", description = "잘못된 이미지 파일")
-    })
     @PostMapping(value = "/{workspaceId}/assets/editorjs",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Upload Editor.js asset", description = "Uploads an asset for Editor.js blocks inside a workspace.")
     public ResponseEntity uploadEditorJsImage(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUserDetails user,
-            @Parameter(description = "워크스페이스 ID", example = "1") @PathVariable Long workspaceId,
-            @Parameter(description = "업로드할 이미지 파일") @RequestParam("image") MultipartFile image
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @RequestParam("image") MultipartFile image
     ) {
         WorkspaceAssetService.EditorJsUploadResult
                 file = workspaceAssetService.uploadAssetsEditorJs(user.getIdx(),workspaceId, image);
@@ -92,49 +88,40 @@ public class WorkspaceAssetController {
                         "assetIdx", file.assetIdx())));
     }
 
-    @Operation(summary = "EditorJS 이미지 삭제", description = "EditorJS 에디터에서 업로드된 이미지를 삭제합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "삭제 성공"),
-            @ApiResponse(responseCode = "404", description = "에셋을 찾을 수 없음")
-    })
     @DeleteMapping(value = "/{workspaceId}/assets/{assetIdx}/editorjs",
             consumes = { MediaType.APPLICATION_JSON_VALUE, MediaType.ALL_VALUE },
             produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Delete Editor.js asset", description = "Deletes an Editor.js asset from a workspace.")
     public ResponseEntity<?> deleteEditorJsImage(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUserDetails user,
-            @Parameter(description = "워크스페이스 ID", example = "1") @PathVariable Long workspaceId,
-            @Parameter(description = "에셋 ID", example = "5") @PathVariable Long assetIdx
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetIdx      // ✅ assetIdx 로 삭제
     ) {
         workspaceAssetService.deleteEditorJsImage(user.getIdx(), workspaceId, assetIdx);
         return ResponseEntity.ok(Map.of("success", 1));
     }
-
-    @Operation(summary = "에셋 삭제", description = "워크스페이스에서 에셋을 삭제합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "삭제 성공"),
-            @ApiResponse(responseCode = "404", description = "에셋을 찾을 수 없음")
-    })
+    /**
+     * 일반 에셋 삭제
+     */
     @DeleteMapping("/{workspaceId}/assets/{assetId}")
+    @Operation(summary = "Delete workspace asset", description = "Deletes a regular workspace asset.")
     public ResponseEntity<?> deleteWorkspaceAsset(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUserDetails user,
-            @Parameter(description = "워크스페이스 ID", example = "1") @PathVariable Long workspaceId,
-            @Parameter(description = "에셋 ID", example = "5") @PathVariable Long assetId
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetId
     ) {
         workspaceAssetService.deleteWorkspaceAsset(user.getIdx(), workspaceId, assetId);
         return ResponseEntity.ok(Map.of("success", 1));
     }
 
-    @Operation(summary = "에셋을 내 드라이브에 저장", description = "워크스페이스 에셋을 내 드라이브에 복사하여 저장합니다.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "드라이브 저장 성공"),
-            @ApiResponse(responseCode = "404", description = "에셋을 찾을 수 없음")
-    })
+
     @PostMapping("/{workspaceId}/assets/{assetId}/save-to-drive")
+    @Operation(summary = "Save asset to drive", description = "Copies a workspace asset into the user's drive.")
     public ResponseEntity<FileCommonDto.FileListItemRes> saveAssetToDrive(
-            @Parameter(hidden = true) @AuthenticationPrincipal AuthUserDetails user,
-            @Parameter(description = "워크스페이스 ID", example = "1") @PathVariable Long workspaceId,
-            @Parameter(description = "에셋 ID", example = "5") @PathVariable Long assetId,
-            @Parameter(description = "저장할 대상 폴더 ID (선택)") @RequestParam(required = false) Long parentId
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetId,
+            @RequestParam(required = false) Long parentId
     ) {
         return ResponseEntity.ok(
                 workspaceAssetService.saveAssetToDrive(
@@ -144,5 +131,63 @@ public class WorkspaceAssetController {
                         parentId
                 )
         );
+    }
+
+    @GetMapping("/{workspaceId}/assets/{assetId}/download")
+    @Operation(summary = "Download workspace asset", description = "Downloads a workspace asset through the backend.")
+    public ResponseEntity<byte[]> downloadWorkspaceAsset(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetId
+    ) {
+        return buildDownloadResponse(
+                workspaceAssetService.downloadWorkspaceAsset(
+                        user != null ? user.getIdx() : 0L,
+                        workspaceId,
+                        assetId
+                )
+        );
+    }
+
+    @GetMapping("/{workspaceId}/assets/{assetId}/download-link")
+    @Operation(summary = "Get workspace asset download link", description = "Returns an attachment-oriented presigned URL for a workspace asset.")
+    public ResponseEntity<FileCommonDto.FileDownloadUrlRes> getWorkspaceAssetDownloadLink(
+            @AuthenticationPrincipal AuthUserDetails user,
+            @PathVariable Long workspaceId,
+            @PathVariable Long assetId
+    ) {
+        return ResponseEntity.ok(new FileCommonDto.FileDownloadUrlRes(
+                workspaceAssetService.getWorkspaceAssetDownloadUrl(
+                        user != null ? user.getIdx() : 0L,
+                        workspaceId,
+                        assetId
+                )
+        ));
+    }
+
+    private ResponseEntity<byte[]> buildDownloadResponse(FileCommonDto.FileDownloadPayload payload) {
+        return ResponseEntity.ok()
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(payload.fileName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .contentLength(payload.contentLength() != null ? payload.contentLength() : payload.bytes().length)
+                .contentType(resolveMediaType(payload.contentType()))
+                .body(payload.bytes());
+    }
+
+    private MediaType resolveMediaType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+
+        try {
+            return MediaType.parseMediaType(contentType);
+        } catch (Exception ignored) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
     }
 }

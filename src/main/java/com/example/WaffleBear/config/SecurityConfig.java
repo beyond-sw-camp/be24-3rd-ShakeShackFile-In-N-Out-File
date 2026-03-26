@@ -57,10 +57,9 @@ public class SecurityConfig {
 
         // SecurityConfig.java 내 인가 설정 수정
         http.authorizeHttpRequests(auth -> auth
+                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/administrator/**").hasAuthority("ROLE_ADMIN")
-                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue", "/auth/logout", "/ws-stomp/**", "/notification/subscribe", "/api/sse/**", "/sse/**",
-                        "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**",
-                        "/actuator/**").permitAll()
+                .requestMatchers("/user/**", "/workspace/**", "/login", "/api/login", "/error", "/file/**", "/auth/reissue", "/auth/logout", "/ws-stomp/**", "/notification/subscribe", "/api/sse/**", "/sse/**").permitAll()
                 .anyRequest().authenticated()
         );
 

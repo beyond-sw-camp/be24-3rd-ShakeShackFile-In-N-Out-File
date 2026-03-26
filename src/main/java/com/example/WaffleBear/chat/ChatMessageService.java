@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,6 +54,7 @@ public class ChatMessageService {
 
     @Transactional(readOnly = true)
     public ChatMessagesDto.PageRes getMessageList(Long roomIdx, Long userIdx, int page, int size) {
+        final LocalDateTime defaultJoinedAt = LocalDateTime.of(2000, 1, 1, 0, 0);
         ChatRooms room = chatRoomRepository.findById(roomIdx)
                 .orElseThrow(() -> new RuntimeException("방을 찾을 수 없습니다."));
 
@@ -62,18 +64,33 @@ public class ChatMessageService {
 
         LocalDateTime joinedAt = participant.getJoinedAt() != null
                 ? participant.getJoinedAt()
-                : LocalDateTime.of(2000, 1, 1, 0, 0);
+                : defaultJoinedAt;
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<ChatMessages> result = chatMessageRepository
                 .findAllByChatRoomsAndCreatedAtAfter(room, joinedAt, pageable);
 
-        List<ChatMessagesDto.ListRes> messageList = result.getContent().stream()
+        List<ChatMessages> messages = result.getContent();
+        List<Long> messageIds = messages.stream()
+                .map(ChatMessages::getIdx)
+                .toList();
+
+        Map<Long, Integer> unreadCountMap = messageIds.isEmpty()
+                ? Map.of()
+                : chatMessageRepository.countUnreadParticipantsByMessageIds(messageIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ChatMessageRepository.MessageUnreadCountView::getMessageIdx,
+                        view -> Math.toIntExact(view.getUnreadCount())
+                ));
+
+        Map<Long, String> profileImageMap = new HashMap<>();
+        List<ChatMessagesDto.ListRes> messageList = messages.stream()
                 .map(msg -> {
-                    int messageUnreadCount = chatMessageRepository.countUnreadParticipants(
-                            roomIdx, msg.getIdx(), msg.getSender().getIdx()
+                    int messageUnreadCount = unreadCountMap.getOrDefault(msg.getIdx(), 0);
+                    String profileImageUrl = profileImageMap.computeIfAbsent(
+                            msg.getSender().getIdx(),
+                            featerService::resolveProfileImage
                     );
-                    String profileImageUrl = featerService.resolveProfileImage(msg.getSender().getIdx());
                     return ChatMessagesDto.ListRes.from(msg, messageUnreadCount, profileImageUrl);
                 })
                 .toList();
@@ -128,6 +145,8 @@ public class ChatMessageService {
 
         String profileImageUrl = featerService.resolveProfileImage(senderIdx);
         int messageUnreadCount = chatMessageRepository.countUnreadParticipants(roomIdx, message.getIdx(), senderIdx);
+        chatRoomService.evictChatListCachesByRoom(roomIdx);
+
         return ChatMessagesDto.ListRes.from(message, messageUnreadCount, profileImageUrl);
     }
 
@@ -146,6 +165,8 @@ public class ChatMessageService {
                             Map.of("type", "READ_UPDATE", "userIdx", userIdx)
                     );
                 });
+        chatRoomService.evictChatListCachesByRoom(roomIdx);
+
     }
 
     public String uploadFile(Long roomIdx, MultipartFile file, Long userIdx) {
@@ -195,6 +216,8 @@ public class ChatMessageService {
         }
 
         message.markDeleted();
+        refreshRoomLastMessage(message.getChatRooms());
+
 
         messagingTemplate.convertAndSend(
                 "/sub/chat/room/" + roomIdx,
@@ -207,6 +230,7 @@ public class ChatMessageService {
                 )
         );
 
+        chatRoomService.evictChatListCachesByRoom(roomIdx);
         sendChatPreviewUpdate(roomIdx);
     }
 
@@ -253,4 +277,12 @@ public class ChatMessageService {
         String contents = message.getContents();
         return (contents == null || contents.isBlank()) ? "메시지가 없습니다." : contents;
     }
+    private void refreshRoomLastMessage(ChatRooms room) {
+        chatMessageRepository.findTopByChatRoomsIdxOrderByCreatedAtDesc(room.getIdx())
+                .ifPresentOrElse(
+                        last -> room.updateLastMessage(getPreviewMessage(last), last.getCreatedAt()),
+                        () -> room.updateLastMessage("", null)
+                );
+    }
+
 }

@@ -39,4 +39,4 @@ out/
 .env
 
 keystore.p12
-keystore.p12
+deploy-backend.bat
