@@ -17,6 +17,19 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
     }
 
     @Override
+    public FileCommonDto.FileListPageRes fileListPage(Long userIdx, FileManageDto.ListPageReq request) {
+        return FileCommonDto.FileListPageRes.builder()
+                .fileList(List.of())
+                .breadcrumbs(List.of())
+                .availableExtensions(List.of())
+                .totalPage(0)
+                .totalCount(0L)
+                .currentPage(0)
+                .currentSize(0)
+                .build();
+    }
+
+    @Override
     public FileCommonDto.FileListItemRes createFolder(Long userIdx, FileManageDto.FolderReq request) {
         throw new UnsupportedOperationException("Local service currently does not support folder operations.");
     }
@@ -79,5 +92,15 @@ public class FileUpDownloadLocalService implements FileUpDownloadService {
     @Override
     public FileCommonDto.FileActionRes setLockedFiles(Long userIdx, List<Long> fileIdxList, boolean locked) {
         throw new UnsupportedOperationException("Local service currently does not support lock operations.");
+    }
+
+    @Override
+    public FileCommonDto.FileDownloadPayload downloadFile(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support download operations.");
+    }
+
+    @Override
+    public String getDownloadUrl(Long userIdx, Long fileIdx) {
+        throw new UnsupportedOperationException("Local service currently does not support download URLs.");
     }
 }

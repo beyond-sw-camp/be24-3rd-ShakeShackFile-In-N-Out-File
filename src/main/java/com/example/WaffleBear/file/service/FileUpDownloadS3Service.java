@@ -27,6 +27,11 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
     }
 
     @Override
+    public FileCommonDto.FileListPageRes fileListPage(Long userIdx, FileManageDto.ListPageReq request) {
+        return resolveDelegate().fileListPage(userIdx, request);
+    }
+
+    @Override
     public FileCommonDto.FileListItemRes createFolder(Long userIdx, FileManageDto.FolderReq request) {
         return resolveDelegate().createFolder(userIdx, request);
     }
@@ -89,6 +94,16 @@ public class FileUpDownloadS3Service implements FileUpDownloadService {
     @Override
     public FileCommonDto.FileActionRes setLockedFiles(Long userIdx, List<Long> fileIdxList, boolean locked) {
         return resolveDelegate().setLockedFiles(userIdx, fileIdxList, locked);
+    }
+
+    @Override
+    public FileCommonDto.FileDownloadPayload downloadFile(Long userIdx, Long fileIdx) {
+        return resolveDelegate().downloadFile(userIdx, fileIdx);
+    }
+
+    @Override
+    public String getDownloadUrl(Long userIdx, Long fileIdx) {
+        return resolveDelegate().getDownloadUrl(userIdx, fileIdx);
     }
 
     private FileUpDownloadService resolveDelegate() {

@@ -9,6 +9,8 @@ import java.util.List;
 public interface FileUpDownloadService {
     List<FileCommonDto.FileListItemRes> fileList(Long idx);
 
+    FileCommonDto.FileListPageRes fileListPage(Long userIdx, FileManageDto.ListPageReq request);
+
     FileCommonDto.FileListItemRes createFolder(Long userIdx, FileManageDto.FolderReq request);
 
     FileCommonDto.FileActionRes moveToTrash(Long userIdx, Long fileIdx);
@@ -34,4 +36,8 @@ public interface FileUpDownloadService {
     FileInfoDto.TextPreviewRes getTextPreview(Long userIdx, Long fileIdx);
 
     FileCommonDto.FileActionRes setLockedFiles(Long userIdx, List<Long> fileIdxList, boolean locked);
+
+    FileCommonDto.FileDownloadPayload downloadFile(Long userIdx, Long fileIdx);
+
+    String getDownloadUrl(Long userIdx, Long fileIdx);
 }

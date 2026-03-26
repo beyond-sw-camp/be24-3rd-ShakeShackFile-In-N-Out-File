@@ -1,17 +1,17 @@
 portone:
   portone_secret: ${PORTONE_SECRET:}
 
-#server:
-#  port: 443
-#  error:
-#    whitelabel:
-#      enabled: false  # 기본 whitelabel 에러 페이지 비활성화
-#    path: /error
-#  ssl:
-#    enabled: true
-#    key-store: file:./keystore.p12
-#    key-store-type: "PKCS12"
-#    key-store-password: dbswns
+server:
+ port: 443
+ error:
+   whitelabel:
+     enabled: false  # 기본 whitelabel 에러 페이지 비활성화
+   path: /error
+ ssl:
+   enabled: true
+   key-store: ${KEYSTORE}
+   key-store-type: ${KEYSTORETYPE}
+   key-store-password: ${KEYSTOREPASS}
 
 
 jwt:
@@ -28,11 +28,15 @@ admin:
   password: ${ADMIN_PASSWORD}
 
 app:
-  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
-  backend-url: ${APP_BACKEND_URL:http://localhost:8080}
+  frontend-url: ${APP_FRONTEND_URL:https://www.fileinnout.kro.kr}
+  backend-url: ${APP_BACKEND_URL:https://api.fileinnout.kro.kr}
   secure-cookie: ${APP_SECURE_COOKIE:false}
 
 spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
   security:
     oauth2:
       client:
@@ -117,42 +121,9 @@ minio:
   s3-bucket-cloud: ${S3AMAZON_CLOUD_BUCKET:}
   s3-bucket-work: ${S3AMAZON_WORKSPACE_BUCKET:}
   s3-region: ${S3AMAZON_REGION:}
-  presigned-url-expiry-seconds: 600
+  presigned-url-expiry-seconds: 1800
 
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-  endpoint:
-    prometheus:
-      enabled: true
-    health:
-      show-details: when-authorized
-  prometheus:
-    metrics:
-      export:
-        enabled: true
-  otlp:
-    tracing:
-      # 예거 서버(.40)의 OTLP HTTP 수신 포트
-      endpoint: http://192.100.1.40:4318/v1/traces
-  tracing:
-    sampling:
-      # 테스트 중에는 모든 요청을 추적하도록 1.0(100%)으로 설정
-      # 나중에 부하 테스트가 끝나면 0.1 정도로 낮추는 게 좋습니다.
-      probability: 1.0
-
-springdoc:
-  api-docs:
-    path: /v3/api-docs
-  swagger-ui:
-    path: /swagger-ui.html
-    tags-sorter: alpha
-    operations-sorter: method
-    display-request-duration: true
-    doc-expansion: none
 
 logging:
   level:

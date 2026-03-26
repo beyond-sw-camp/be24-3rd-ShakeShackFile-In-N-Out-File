@@ -3,7 +3,6 @@ package com.example.WaffleBear.chat.model.entity;
 
 import com.example.WaffleBear.user.model.User;
 import jakarta.persistence.*;
-import jakarta.persistence.Entity;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

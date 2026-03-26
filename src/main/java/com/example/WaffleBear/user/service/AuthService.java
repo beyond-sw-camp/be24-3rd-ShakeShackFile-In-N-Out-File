@@ -13,7 +13,6 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -32,25 +31,17 @@ public class AuthService {
         String refresh = jwtUtil.createToken("refresh", userIdx, resolvedUserId, email, name, role, 1209600000L);
         LocalDateTime expiryDate = LocalDateTime.now().plusDays(14);
 
-        // 2. DB 영속성 관리 (Upsert: 비관적 락으로 동시성 제어)
-        refreshTokenRepository.findByEmailForUpdate(email)
+        // 2. DB 영속성 관리 (Upsert: 존재하면 갱신, 없으면 삽입)
+        refreshTokenRepository.findByEmail(email)
                 .ifPresentOrElse(
                         existingToken -> existingToken.updateToken(refresh, expiryDate),
-                        () -> {
-                            try {
-                                refreshTokenRepository.save(
-                                        RefreshToken.builder()
-                                                .email(email)
-                                                .token(refresh)
-                                                .expiryDate(expiryDate)
-                                                .build()
-                                );
-                            } catch (DataIntegrityViolationException e) {
-                                // 동시 로그인으로 다른 스레드가 먼저 insert한 경우 → update로 전환
-                                refreshTokenRepository.findByEmail(email)
-                                        .ifPresent(t -> t.updateToken(refresh, expiryDate));
-                            }
-                        }
+                        () -> refreshTokenRepository.save(
+                                RefreshToken.builder()
+                                        .email(email)
+                                        .token(refresh)
+                                        .expiryDate(expiryDate)
+                                        .build()
+                        )
                 );
 
         // 3. 결과 래핑 후 반환

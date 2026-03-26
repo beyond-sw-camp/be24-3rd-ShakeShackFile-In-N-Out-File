@@ -9,11 +9,9 @@ import com.example.WaffleBear.administrator.storage.DataTransferStatus;
 import com.example.WaffleBear.administrator.storage.StorageAnalyticsConfig;
 import com.example.WaffleBear.administrator.storage.StorageAnalyticsConfigRepository;
 import com.example.WaffleBear.chat.ChatMessageRepository;
-import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.common.exception.BaseException;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.file.FileUpDownloadRepository;
-import com.example.WaffleBear.file.model.FileInfo;
 import com.example.WaffleBear.file.model.FileNodeType;
 import com.example.WaffleBear.file.service.StoragePlanService;
 import com.example.WaffleBear.file.upload.UploadService;
@@ -21,7 +19,6 @@ import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.workspace.asset.WorkspaceAssetRepository;
-import com.example.WaffleBear.workspace.asset.model.WorkspaceAsset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.AccessDeniedException;
@@ -70,9 +67,9 @@ public class StorageAnalyticsService {
         Map<Long, Long> workspaceStoredBytesByUser = new HashMap<>();
         Map<Long, Long> chatStoredBytesByUser = new HashMap<>();
 
-        long driveStoredBytes = accumulateDriveStorage(fileUpDownloadRepository.findAll(), driveStoredBytesByUser);
-        long workspaceStoredBytes = accumulateWorkspaceStorage(workspaceAssetRepository.findAll(), workspaceStoredBytesByUser);
-        long chatStoredBytes = accumulateChatStorage(chatMessageRepository.findAll(), chatStoredBytesByUser);
+        long driveStoredBytes = accumulateDriveStorage(driveStoredBytesByUser);
+        long workspaceStoredBytes = accumulateWorkspaceStorage(workspaceStoredBytesByUser);
+        long chatStoredBytes = accumulateChatStorage(chatStoredBytesByUser);
         long providerUsedBytes = driveStoredBytes + workspaceStoredBytes + chatStoredBytes;
 
         long allocatedUserQuotaBytes = trackedUsers.stream()
@@ -245,48 +242,42 @@ public class StorageAnalyticsService {
                 ));
     }
 
-    private long accumulateDriveStorage(List<FileInfo> files, Map<Long, Long> storedBytesByUser) {
+    private long accumulateDriveStorage(Map<Long, Long> storedBytesByUser) {
         long total = 0L;
-        for (FileInfo file : files) {
-            if (resolveNodeType(file) != FileNodeType.FILE || file.getUser() == null || file.getUser().getIdx() == null) {
-                continue;
+        for (FileUpDownloadRepository.UserDashboardStatProjection row :
+                fileUpDownloadRepository.aggregateDashboardStatsByUser(FileNodeType.FOLDER)) {
+            Long userIdx = row.getUserIdx();
+            long storedBytes = Math.max(0L, row.getUsedBytes() == null ? 0L : row.getUsedBytes());
+            if (userIdx != null) {
+                storedBytesByUser.put(userIdx, storedBytes);
             }
-
-            long size = Math.max(0L, file.getFileSize() == null ? 0L : file.getFileSize());
-            total += size;
-            storedBytesByUser.merge(file.getUser().getIdx(), size, Long::sum);
+            total += storedBytes;
         }
         return total;
     }
 
-    private long accumulateWorkspaceStorage(List<WorkspaceAsset> assets, Map<Long, Long> storedBytesByUser) {
+    private long accumulateWorkspaceStorage(Map<Long, Long> storedBytesByUser) {
         long total = 0L;
-        for (WorkspaceAsset asset : assets) {
-            if (asset.getUploader() == null || asset.getUploader().getIdx() == null) {
-                continue;
+        for (WorkspaceAssetRepository.UserStoredBytesProjection row : workspaceAssetRepository.aggregateStoredBytesByUploader()) {
+            Long userIdx = row.getUserIdx();
+            long storedBytes = Math.max(0L, row.getStoredBytes() == null ? 0L : row.getStoredBytes());
+            if (userIdx != null) {
+                storedBytesByUser.put(userIdx, storedBytes);
             }
-
-            long size = Math.max(0L, asset.getFileSize() == null ? 0L : asset.getFileSize());
-            total += size;
-            storedBytesByUser.merge(asset.getUploader().getIdx(), size, Long::sum);
+            total += storedBytes;
         }
         return total;
     }
 
-    private long accumulateChatStorage(List<ChatMessages> messages, Map<Long, Long> storedBytesByUser) {
+    private long accumulateChatStorage(Map<Long, Long> storedBytesByUser) {
         long total = 0L;
-        for (ChatMessages message : messages) {
-            if (message.getSender() == null || message.getSender().getIdx() == null) {
-                continue;
+        for (ChatMessageRepository.UserStoredBytesProjection row : chatMessageRepository.aggregateStoredBytesBySender()) {
+            Long userIdx = row.getUserIdx();
+            long storedBytes = Math.max(0L, row.getStoredBytes() == null ? 0L : row.getStoredBytes());
+            if (userIdx != null) {
+                storedBytesByUser.put(userIdx, storedBytes);
             }
-            if ((message.getFileUrl() == null || message.getFileUrl().isBlank())
-                    && (message.getFileSize() == null || message.getFileSize() <= 0L)) {
-                continue;
-            }
-
-            long size = Math.max(0L, message.getFileSize() == null ? 0L : message.getFileSize());
-            total += size;
-            storedBytesByUser.merge(message.getSender().getIdx(), size, Long::sum);
+            total += storedBytes;
         }
         return total;
     }
@@ -388,10 +379,6 @@ public class StorageAnalyticsService {
         )) {
             throw new AccessDeniedException("administrator only");
         }
-    }
-
-    private FileNodeType resolveNodeType(FileInfo file) {
-        return file != null && file.getNodeType() != null ? file.getNodeType() : FileNodeType.FILE;
     }
 
     private List<DataTransferLedger> loadTransferLedgers(LocalDateTime startedAt) {

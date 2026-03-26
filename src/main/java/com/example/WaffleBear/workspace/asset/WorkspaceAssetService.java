@@ -15,13 +15,13 @@ import com.example.WaffleBear.workspace.asset.model.WorkspaceAssetType;
 import com.example.WaffleBear.workspace.model.post.Post;
 import com.example.WaffleBear.workspace.model.relation.AccessRole;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
-import com.example.WaffleBear.workspace.repository.PostRepository;
 import com.example.WaffleBear.workspace.repository.UserPostRepository;
 import io.minio.*;
 import io.minio.http.Method;
 import io.minio.messages.DeleteObject;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.http.ContentDisposition;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,7 +52,6 @@ public class WorkspaceAssetService {
     private final UserRepository userRepository;
     private final WorkspaceAssetRepository workspaceAssetRepository;
     private final UserPostRepository userPostRepository;
-    private final PostRepository postRepository;
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
     private final SimpMessagingTemplate messagingTemplate;
@@ -169,7 +168,7 @@ public class WorkspaceAssetService {
     public List<WorkspaceAssetDto.AssetRes> listAssets(Long userIdx, Long workspaceIdx) {
         WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, false);
 
-        return workspaceAssetRepository.findAllByWorkspace_IdxOrderByCreatedAtDesc(permission.workspace().getIdx())
+        return workspaceAssetRepository.findProjectedAllByWorkspaceIdxOrderByCreatedAtDesc(permission.workspace().getIdx())
                 .stream()
                 .map(this::toAssetRes)
                 .toList();
@@ -182,7 +181,7 @@ public class WorkspaceAssetService {
             throw BaseException.from(BaseResponseStatus.FILE_EMPTY);
         }
         String contentType = image.getContentType();
-        boolean isImage = IMAGE_EXTENSIONS.contains(contentType);
+        boolean isImage = isImageFile(contentType, extractExtension(image.getOriginalFilename()));
 
         if(permission.accessRole == AccessRole.READ) {
             throw new RuntimeException("읽기만 가능합니다.");
@@ -194,9 +193,7 @@ public class WorkspaceAssetService {
         if (!isImage && image.getSize() > MAX_FILE_SIZE) {
             throw new IllegalArgumentException("파일은 30MB 이하만 업로드 가능합니다.");
         }
-        Post result = postRepository.findById(workspaceIdx).orElseThrow(
-                () -> new RuntimeException("해당 워크스페이스가 존재하지않습니다.")
-        );
+        Post result = permission.workspace();
         String objectKey = "asset/" + result.getUUID() + "/"
                 + System.currentTimeMillis() + "_" + image.getOriginalFilename();
 
@@ -273,6 +270,7 @@ public class WorkspaceAssetService {
         // ✅ DB에서도 삭제
         workspaceAssetRepository.delete(asset);
     }
+
     /**
      * 일반 에셋 삭제
      */
@@ -350,19 +348,48 @@ public class WorkspaceAssetService {
         return toDriveFileListItem(savedFile, targetBucket);
     }
 
+    @Transactional(readOnly = true)
+    public FileCommonDto.FileDownloadPayload downloadWorkspaceAsset(Long userIdx, Long workspaceIdx, Long assetIdx) {
+        WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, false);
+        WorkspaceAsset asset = workspaceAssetRepository
+                .findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
+
+        return new FileCommonDto.FileDownloadPayload(
+                readObjectBytes(minioProperties.getBucket_cloud(), asset.getObjectKey()),
+                resolveContentType(asset.getContentType()),
+                sanitizeDownloadFileName(asset.getOriginalName(), asset.getStoredFileName()),
+                asset.getFileSize()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public String getWorkspaceAssetDownloadUrl(Long userIdx, Long workspaceIdx, Long assetIdx) {
+        WorkspacePermission permission = requireWorkspaceAccess(userIdx, workspaceIdx, false);
+        WorkspaceAsset asset = workspaceAssetRepository
+                .findByIdxAndWorkspace_Idx(assetIdx, permission.workspace().getIdx())
+                .orElseThrow(() -> BaseException.from(BaseResponseStatus.REQUEST_ERROR));
+
+        return generateAttachmentDownloadUrl(
+                asset.getObjectKey(),
+                sanitizeDownloadFileName(asset.getOriginalName(), asset.getStoredFileName()),
+                resolveContentType(asset.getContentType())
+        );
+    }
+
     @Transactional
     public void deleteAllWorkspaceAssets(Post workspace) {
         if (workspace == null || workspace.getIdx() == null) {
             return;
         }
 
-        List<WorkspaceAsset> assets = workspaceAssetRepository.findAllByWorkspace_Idx(workspace.getIdx());
-        if (assets.isEmpty()) {
+        List<String> objectKeys = workspaceAssetRepository.findObjectKeysByWorkspaceIdx(workspace.getIdx());
+        if (objectKeys.isEmpty()) {
             return;
         }
 
-        deleteObjectKeys(assets.stream().map(WorkspaceAsset::getObjectKey).toList());
-        workspaceAssetRepository.deleteAllInBatch(assets);
+        deleteObjectKeys(objectKeys);
+        workspaceAssetRepository.deleteAllByWorkspaceIdx(workspace.getIdx());
     }
 
     // ─── 내부 헬퍼 ────────────────────────────────────────────────────────────
@@ -482,6 +509,28 @@ public class WorkspaceAssetService {
                 asset.getCreatedAt()
         );
     }
+
+    private WorkspaceAssetDto.AssetRes toAssetRes(WorkspaceAssetRepository.WorkspaceAssetView asset) {
+        String downloadUrl = generatePresignedGetUrl(asset.getObjectKey());
+        String previewUrl  = asset.getAssetType() == WorkspaceAssetType.IMAGE ? downloadUrl : null;
+
+        return new WorkspaceAssetDto.AssetRes(
+                asset.getIdx(),
+                asset.getWorkspaceIdx(),
+                asset.getAssetType().name(),
+                asset.getOriginalName(),
+                asset.getStoredFileName(),
+                asset.getObjectFolder(),
+                asset.getObjectKey(),
+                asset.getContentType(),
+                asset.getFileSize(),
+                previewUrl,
+                downloadUrl,
+                minioProperties.getPresignedUrlExpirySeconds(),
+                asset.getCreatedAt()
+        );
+    }
+
     /**
      * 이미지 파일 여부 판단
      */
@@ -674,5 +723,65 @@ public class WorkspaceAssetService {
         } catch (Exception exception) {
             return null;
         }
+    }
+
+    private byte[] readObjectBytes(String bucketName, String objectKey) {
+        try (var objectStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectKey)
+                        .build()
+        )) {
+            return objectStream.readAllBytes();
+        } catch (Exception exception) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+    }
+
+    private String generateAttachmentDownloadUrl(String objectKey, String fileName, String contentType) {
+        if (!StringUtils.hasText(objectKey)) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        try {
+            Map<String, String> queryParams = new LinkedHashMap<>();
+            queryParams.put(
+                    "response-content-disposition",
+                    ContentDisposition.attachment()
+                            .filename(fileName, java.nio.charset.StandardCharsets.UTF_8)
+                            .build()
+                            .toString()
+            );
+            queryParams.put(
+                    "response-content-type",
+                    (contentType == null || contentType.isBlank())
+                            ? "application/octet-stream"
+                            : contentType
+            );
+
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(minioProperties.getBucket_cloud())
+                            .object(objectKey)
+                            .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                            .extraQueryParams(queryParams)
+                            .build()
+            );
+        } catch (Exception exception) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+    }
+
+    private String sanitizeDownloadFileName(String preferredName, String fallbackName) {
+        String candidate = preferredName;
+        if (!StringUtils.hasText(candidate)) {
+            candidate = fallbackName;
+        }
+        if (!StringUtils.hasText(candidate)) {
+            candidate = "file";
+        }
+
+        return candidate.replace("\r", "").replace("\n", "").trim();
     }
 }

@@ -20,17 +20,28 @@ import io.minio.StatObjectArgs;
 import io.minio.Result;
 import io.minio.http.Method;
 import io.minio.messages.DeleteObject;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -66,6 +77,39 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
                 .stream()
                 .map(this::toFileListItem)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FileCommonDto.FileListPageRes fileListPage(Long userIdx, FileManageDto.ListPageReq request) {
+        Long normalizedUserIdx = userIdx == null ? 0L : userIdx;
+        Long parentId = request != null ? request.getParentId() : null;
+        int page = sanitizePage(request != null ? request.getPage() : null);
+        int size = sanitizePageSize(request != null ? request.getSize() : null);
+
+        if (parentId != null) {
+            FileInfo parent = getOwnedFile(normalizedUserIdx, parentId);
+            if (parent.isTrashed() || resolveNodeType(parent) != FileNodeType.FOLDER) {
+                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+            }
+        }
+
+        Pageable pageable = PageRequest.of(page, size, resolveSort(request != null ? request.getSortOption() : null));
+        Page<FileInfo> result = fileUpDownloadRepository.findAll(buildPageSpecification(normalizedUserIdx, request), pageable);
+
+        return FileCommonDto.FileListPageRes.builder()
+                .fileList(result.getContent().stream().map(this::toFileListItem).toList())
+                .breadcrumbs(buildBreadcrumbs(normalizedUserIdx, parentId))
+                .availableExtensions(fileUpDownloadRepository.findDistinctFileFormatsByUserAndParent(
+                        normalizedUserIdx,
+                        parentId,
+                        FileNodeType.FILE
+                ))
+                .totalPage(result.getTotalPages())
+                .totalCount(result.getTotalElements())
+                .currentPage(result.getNumber())
+                .currentSize(result.getSize())
+                .build();
     }
 
     @Override
@@ -502,6 +546,45 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 
+    @Override
+    public FileCommonDto.FileDownloadPayload downloadFile(Long userIdx, Long fileIdx) {
+        FileInfo file = getOwnedFile(userIdx, fileIdx);
+        if (resolveNodeType(file) != FileNodeType.FILE || file.isLockedFile()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        String objectKey = file.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        return new FileCommonDto.FileDownloadPayload(
+                readObjectBytes(minioProperties.getBucket_cloud(), objectKey),
+                resolveDownloadContentType(file.getFileOriginName()),
+                sanitizeDownloadFileName(file.getFileOriginName(), file.getFileSaveName()),
+                file.getFileSize()
+        );
+    }
+
+    @Override
+    public String getDownloadUrl(Long userIdx, Long fileIdx) {
+        FileInfo file = getOwnedFile(userIdx, fileIdx);
+        if (resolveNodeType(file) != FileNodeType.FILE || file.isLockedFile()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        String objectKey = file.getFileSavePath();
+        if (objectKey == null || objectKey.isBlank()) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        return generateAttachmentDownloadUrl(
+                objectKey,
+                sanitizeDownloadFileName(file.getFileOriginName(), file.getFileSaveName()),
+                resolveDownloadContentType(file.getFileOriginName())
+        );
+    }
+
     private FileInfo resolveParentFolder(Long userIdx, Long parentId) {
         if (parentId == null) {
             return null;
@@ -773,6 +856,37 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 
+    private String generateAttachmentDownloadUrl(String objectKey, String fileName, String contentType) {
+        if (objectKey == null || objectKey.isBlank()) {
+            return null;
+        }
+
+        try {
+            Map<String, String> queryParams = new HashMap<>();
+            queryParams.put(
+                    "response-content-disposition",
+                    ContentDisposition.attachment()
+                            .filename(fileName, StandardCharsets.UTF_8)
+                            .build()
+                            .toString()
+            );
+            queryParams.put("response-content-type", resolveDownloadContentType(fileName));
+            if (contentType != null && !contentType.isBlank()) {
+                queryParams.put("response-content-type", contentType);
+            }
+
+            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(minioProperties.getBucket_cloud())
+                    .object(objectKey)
+                    .expiry(minioProperties.getPresignedUrlExpirySeconds())
+                    .extraQueryParams(queryParams)
+                    .build());
+        } catch (Exception exception) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+    }
+
     private String generatePresignedThumbnailUrl(FileInfo entity) {
         if (resolveNodeType(entity) != FileNodeType.FILE || entity.isLockedFile() || !isVideoFile(entity.getFileFormat())) {
             return null;
@@ -957,6 +1071,184 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         return normalized;
     }
 
+    private Specification<FileInfo> buildPageSpecification(Long userIdx, FileManageDto.ListPageReq request) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            Long parentId = request != null ? request.getParentId() : null;
+            String keyword = normalizeSearchKeyword(request != null ? request.getSearchQuery() : null);
+            String extensionFilter = normalizeFilterValue(request != null ? request.getExtensionFilter() : null, "all");
+            String sizeFilter = normalizeFilterValue(request != null ? request.getSizeFilter() : null, "all");
+            String statusFilter = normalizeFilterValue(request != null ? request.getStatusFilter() : null, "all");
+
+            Predicate isFile = criteriaBuilder.or(
+                    criteriaBuilder.isNull(root.get("nodeType")),
+                    criteriaBuilder.equal(root.get("nodeType"), FileNodeType.FILE)
+            );
+            Predicate isFolder = criteriaBuilder.equal(root.get("nodeType"), FileNodeType.FOLDER);
+
+            predicates.add(criteriaBuilder.equal(root.get("user").get("idx"), userIdx));
+            predicates.add(criteriaBuilder.or(
+                    criteriaBuilder.isNull(root.get("trashed")),
+                    criteriaBuilder.isFalse(root.get("trashed"))
+            ));
+
+            if (parentId == null) {
+                predicates.add(criteriaBuilder.isNull(root.get("parent")));
+            } else {
+                predicates.add(criteriaBuilder.equal(root.get("parent").get("idx"), parentId));
+            }
+
+            if (!keyword.isBlank()) {
+                String likePattern = "%" + keyword + "%";
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.like(criteriaBuilder.lower(root.get("fileOriginName")), likePattern),
+                        criteriaBuilder.like(criteriaBuilder.lower(root.get("fileFormat")), likePattern)
+                ));
+            }
+
+            if (!"all".equals(extensionFilter)) {
+                predicates.add(criteriaBuilder.and(
+                        isFile,
+                        criteriaBuilder.equal(criteriaBuilder.lower(root.get("fileFormat")), extensionFilter)
+                ));
+            }
+
+            if (!"all".equals(sizeFilter)) {
+                Expression<Long> fileSize = criteriaBuilder.coalesce(root.get("fileSize"), 0L);
+                Predicate sizePredicate = switch (sizeFilter) {
+                    case "lte10" -> criteriaBuilder.lessThanOrEqualTo(fileSize, megabytesToBytes(10L));
+                    case "lte100" -> criteriaBuilder.lessThanOrEqualTo(fileSize, megabytesToBytes(100L));
+                    case "lte1000" -> criteriaBuilder.lessThanOrEqualTo(fileSize, megabytesToBytes(1000L));
+                    case "lte100000" -> criteriaBuilder.lessThanOrEqualTo(fileSize, megabytesToBytes(100000L));
+                    case "gte100001" -> criteriaBuilder.greaterThanOrEqualTo(fileSize, megabytesToBytes(100001L));
+                    case "custom" -> buildCustomSizePredicate(criteriaBuilder, fileSize, request);
+                    default -> null;
+                };
+
+                if (sizePredicate != null) {
+                    predicates.add(criteriaBuilder.or(isFolder, criteriaBuilder.and(isFile, sizePredicate)));
+                }
+            }
+
+            switch (statusFilter) {
+                case "shared", "shared-owned" -> predicates.add(criteriaBuilder.isTrue(root.get("sharedFile")));
+                case "shared-with-me" -> predicates.add(criteriaBuilder.disjunction());
+                case "locked" -> predicates.add(criteriaBuilder.isTrue(root.get("lockedFile")));
+                case "unlocked" -> predicates.add(criteriaBuilder.isFalse(root.get("lockedFile")));
+                default -> {
+                }
+            }
+
+            return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private Predicate buildCustomSizePredicate(
+            jakarta.persistence.criteria.CriteriaBuilder criteriaBuilder,
+            Expression<Long> fileSize,
+            FileManageDto.ListPageReq request
+    ) {
+        Long minBytes = parseMegabytesToBytes(request != null ? request.getCustomMinSize() : null);
+        Long maxBytes = parseMegabytesToBytes(request != null ? request.getCustomMaxSize() : null);
+
+        if (minBytes == null && maxBytes == null) {
+            return null;
+        }
+        if (minBytes != null && maxBytes != null) {
+            return criteriaBuilder.between(fileSize, minBytes, maxBytes);
+        }
+        if (minBytes != null) {
+            return criteriaBuilder.greaterThanOrEqualTo(fileSize, minBytes);
+        }
+        return criteriaBuilder.lessThanOrEqualTo(fileSize, maxBytes);
+    }
+
+    private List<FileCommonDto.FileBreadcrumbRes> buildBreadcrumbs(Long userIdx, Long parentId) {
+        if (parentId == null) {
+            return List.of();
+        }
+
+        List<FileCommonDto.FileBreadcrumbRes> breadcrumbs = new ArrayList<>();
+        FileInfo cursor = getOwnedFile(userIdx, parentId);
+        if (cursor.isTrashed() || resolveNodeType(cursor) != FileNodeType.FOLDER) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+
+        while (cursor != null) {
+            breadcrumbs.add(FileCommonDto.FileBreadcrumbRes.builder()
+                    .idx(cursor.getIdx())
+                    .fileOriginName(cursor.getFileOriginName())
+                    .parentId(cursor.getParent() != null ? cursor.getParent().getIdx() : null)
+                    .build());
+            cursor = cursor.getParent();
+        }
+
+        Collections.reverse(breadcrumbs);
+        return breadcrumbs;
+    }
+
+    private Sort resolveSort(String sortOption) {
+        String normalizedSort = normalizeFilterValue(sortOption, "updatedat-desc");
+
+        return switch (normalizedSort) {
+            case "updatedat-asc" -> Sort.by(
+                    Sort.Order.asc("lastModifyDate"),
+                    Sort.Order.asc("uploadDate")
+            );
+            case "name-asc" -> Sort.by(Sort.Order.asc("fileOriginName").ignoreCase());
+            case "name-desc" -> Sort.by(Sort.Order.desc("fileOriginName").ignoreCase());
+            case "size-asc" -> Sort.by(Sort.Order.asc("fileSize"), Sort.Order.desc("lastModifyDate"));
+            case "size-desc" -> Sort.by(Sort.Order.desc("fileSize"), Sort.Order.desc("lastModifyDate"));
+            default -> Sort.by(
+                    Sort.Order.desc("lastModifyDate"),
+                    Sort.Order.desc("uploadDate")
+            );
+        };
+    }
+
+    private int sanitizePage(Integer page) {
+        if (page == null || page < 0) {
+            return 0;
+        }
+        return page;
+    }
+
+    private int sanitizePageSize(Integer size) {
+        if (size == null || size <= 0) {
+            return 10;
+        }
+        return Math.min(30, size);
+    }
+
+    private String normalizeSearchKeyword(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeFilterValue(String value, String fallback) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return normalized.isEmpty() ? fallback : normalized;
+    }
+
+    private long megabytesToBytes(long megabytes) {
+        return megabytes * 1024L * 1024L;
+    }
+
+    private Long parseMegabytesToBytes(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            double megabytes = Double.parseDouble(value.trim());
+            if (!Double.isFinite(megabytes) || megabytes < 0) {
+                return null;
+            }
+            return Math.round(megabytes * 1024D * 1024D);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
     private FileCommonDto.FileListItemRes toFileListItem(FileInfo entity) {
         FileNodeType nodeType = resolveNodeType(entity);
 
@@ -1063,6 +1355,39 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         return "text/plain";
     }
 
+    private byte[] readObjectBytes(String bucketName, String objectKey) {
+        try (var objectStream = minioClient.getObject(
+                GetObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(objectKey)
+                        .build()
+        )) {
+            return objectStream.readAllBytes();
+        } catch (Exception exception) {
+            throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        }
+    }
+
+    private String resolveDownloadContentType(String fileName) {
+        String contentType = URLConnection.guessContentTypeFromName(fileName == null ? "" : fileName);
+        return (contentType == null || contentType.isBlank()) ? "application/octet-stream" : contentType;
+    }
+
+    private String sanitizeDownloadFileName(String preferredName, String fallbackName) {
+        String candidate = preferredName;
+        if (candidate == null || candidate.isBlank()) {
+            candidate = fallbackName;
+        }
+        if (candidate == null || candidate.isBlank()) {
+            candidate = "file";
+        }
+
+        return candidate
+                .replace("\r", "")
+                .replace("\n", "")
+                .trim();
+    }
+
     private FileInfoDto.StorageCategoryRes toStorageCategoryResponse(
             String categoryKey,
             StorageCategoryAccumulator accumulator,
@@ -1106,4 +1431,3 @@ public class FileUpDownloadMinioService implements FileUpDownloadService {
         }
     }
 }
-

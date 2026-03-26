@@ -1,6 +1,5 @@
 package com.example.WaffleBear.user.model;
 
-import com.example.WaffleBear.file.model.FileInfo;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -8,7 +7,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,8 +14,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
-
-import java.util.List;
 
 @NoArgsConstructor
 @AllArgsConstructor
@@ -49,9 +45,6 @@ public class User {
     @Setter
     @Enumerated(EnumType.STRING)
     private UserAccountStatus accountStatus;
-
-    @OneToMany(mappedBy = "user")
-    List<FileInfo> fileInfoList;
 
     @PrePersist
     public void prePersist() {

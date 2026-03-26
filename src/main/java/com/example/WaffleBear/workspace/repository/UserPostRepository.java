@@ -10,9 +10,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserPostRepository extends JpaRepository<UserPost, Long> {
-    Optional<UserPost> findByUser_IdxAndWorkspace_Idx(Long userId, Long workspaceId);
+    @Query("SELECT up FROM UserPost up JOIN FETCH up.workspace WHERE up.user.idx = :userId AND up.workspace.idx = :workspaceId")
+    Optional<UserPost> findByUser_IdxAndWorkspace_Idx(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId);
 
-    List<UserPost> findAllByWorkspace_idx(Long post_idx);
+    @Query("SELECT up FROM UserPost up JOIN FETCH up.user WHERE up.workspace.idx = :postIdx")
+    List<UserPost> findAllByWorkspace_idx(@Param("postIdx") Long postIdx);
 
     @Query("SELECT up FROM UserPost up JOIN FETCH up.workspace w WHERE up.user.idx = :userIdx ORDER BY w.updatedAt DESC, w.createdAt DESC")
     List<UserPost> findAllByUser_IdxOrderByWorkspaceUpdatedAtDesc(@Param("userIdx") Long userIdx);

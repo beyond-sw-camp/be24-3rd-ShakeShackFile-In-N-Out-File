@@ -1,9 +1,19 @@
 package com.example.WaffleBear.workspace.model.post;
 
-import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,12 +30,12 @@ public class Post {
     @Column(name = "post_idx")
     private Long idx;
 
-    // User 엔티티의 idx를 외래키로 참조 (N:1 관계)
-    @OneToMany(mappedBy = "workspace", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "workspace", cascade = jakarta.persistence.CascadeType.ALL, orphanRemoval = true)
     private List<UserPost> userPosts;
 
     @Column(nullable = false)
     private String title;
+
     @Column(columnDefinition = "LONGTEXT", nullable = false)
     private String contents;
 
@@ -44,29 +54,24 @@ public class Post {
     @Column(nullable = false)
     private String UUID;
 
-    @Setter
-    @Column(name = "only_role")
-    private isShare onlyRole;
-
     @PrePersist
     public void setCreatedAt() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = createdAt;
         this.type = false;
         this.status = isShare.Private;
-        this.onlyRole = isShare.Private;
     }
 
     @PreUpdate
     public void preUpdate() {
-        this.updatedAt = LocalDateTime.now(); // 수정 시각 자동 업데이트 등
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void update(String title, String contents) {
         this.title = title;
         this.contents = contents;
-        // updatedAt은 @PreUpdate에 의해 자동으로 갱신됩니다.
     }
+
     public void typeUpdate(Boolean type, isShare status) {
         this.type = type;
         this.status = status;

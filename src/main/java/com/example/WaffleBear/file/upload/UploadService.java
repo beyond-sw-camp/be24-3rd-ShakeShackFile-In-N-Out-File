@@ -126,6 +126,7 @@ public class UploadService {
         String fileFormat = normalizeFormat(request.getFileFormat(), fileOriginName);
         String finalObjectKey = normalizeOwnedObjectKey(userIdx, request.getFinalObjectKey());
         List<String> chunkObjectKeys = normalizeOwnedObjectKeys(userIdx, request.getChunkObjectKeys());
+        long expectedFileSize = Math.max(0L, request.getFileSize() == null ? 0L : request.getFileSize());
 
         cleanupExpiredUploadReservations();
 
@@ -141,9 +142,6 @@ public class UploadService {
                     .build();
         }
 
-        long actualFileSize = statObjectSize(finalObjectKey);
-        ensureWithinStorageQuota(userIdx, actualFileSize, finalObjectKey);
-
         if (chunkObjectKeys.isEmpty()) {
             ensureUploadedObjectExists(finalObjectKey);
         } else {
@@ -153,6 +151,9 @@ public class UploadService {
             }
             ensureUploadedObjectExists(finalObjectKey);
         }
+
+        long actualFileSize = resolveCompletedObjectSize(finalObjectKey, expectedFileSize);
+        ensureWithinStorageQuota(userIdx, actualFileSize, finalObjectKey);
 
         saveFinalFileInfo(userIdx, request, fileOriginName, fileFormat, actualFileSize, finalObjectKey);
         releaseUploadQuota(finalObjectKey);
@@ -315,10 +316,8 @@ public class UploadService {
     }
 
     private long resolveUsedStorageBytes(Long userIdx) {
-        return fileUpDownloadRepository.findAllByUser_Idx(userIdx).stream()
-                .filter(file -> resolveNodeType(file) == FileNodeType.FILE)
-                .mapToLong(file -> Math.max(0L, file.getFileSize() == null ? 0L : file.getFileSize()))
-                .sum();
+        Long usedBytes = fileUpDownloadRepository.sumStoredFileBytesByUser(userIdx, FileNodeType.FILE);
+        return Math.max(0L, usedBytes == null ? 0L : usedBytes);
     }
 
     private long resolveReservedStorageBytes(Long userIdx, String ignoredReservationKey) {
@@ -612,11 +611,6 @@ public class UploadService {
         }
         return finalObjectKey.substring(separatorIndex + 1);
     }
-
-    private FileNodeType resolveNodeType(FileInfo entity) {
-        return entity.getNodeType() == null ? FileNodeType.FILE : entity.getNodeType();
-    }
-
     private void recordAbortedUploadBytes(Long userIdx, List<String> objectKeys, String finalObjectKey) {
         long uploadedBytes = sumExistingObjectSizes(objectKeys);
         if (uploadedBytes <= 0L) {
@@ -668,6 +662,14 @@ public class UploadService {
     // 업로드 예정 파일의 용량 예약 정보를 저장하는 레코드임
     // finalObjectKey = 최종 저장될 파일의 object key(MinIO저장 경로) ,fileSize = 해당 파일의 크기
     // 용도는 "이 파일이 업로드될 예정이니 이 용량을 예약해 두자" 라는 의미
+    private long resolveCompletedObjectSize(String finalObjectKey, long expectedFileSize) {
+        long actualFileSize = statObjectSize(finalObjectKey);
+        if (actualFileSize > 0L) {
+            return actualFileSize;
+        }
+        return Math.max(0L, expectedFileSize);
+    }
+
     private record PendingUploadReservation(String finalObjectKey, long fileSize) {
     }
 
