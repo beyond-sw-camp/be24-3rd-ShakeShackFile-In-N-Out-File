@@ -53,7 +53,7 @@ public class PostService {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Transactional
-    public PostDto.ResPost save(PostDto.ReqPost dto, User user) {
+    public PostDto.ResPost save(PostDto.ReqPost dto, Long userIdx) {
         Post result;
 
         if (dto.idx() != null) {
@@ -71,14 +71,22 @@ public class PostService {
             result.setUUID(UUID.randomUUID().toString());
 
             pr.save(result);
-            upr.save(new UserPostDto.ReqUserPost(null, null).toEntity(result, user));
+            if (userIdx == null) {
+                throw new BaseException(USER_NOT_FOUND);
+            }
+
+            upr.save(new UserPostDto.ReqUserPost(null, null).toEntity(result, ur.getReferenceById(userIdx)));
 
             // 생성 직후에도 동일한 방식으로 SSE 타이틀 전파
             List<Long> user_list = upr.findUserIdsByPostIdx(result.getIdx());
             sseService.sendTitleUpdate(result.getIdx(), result.getTitle(), user_list);
         }
 
-        AccessRole accessRole = upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx())
+        if (userIdx == null) {
+            throw new BaseException(USER_NOT_FOUND);
+        }
+
+        AccessRole accessRole = upr.findByUser_IdxAndWorkspace_Idx(userIdx, result.getIdx())
                 .map(UserPost::getLevel)
                 .orElse(AccessRole.ADMIN);
 
@@ -91,13 +99,10 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public PostDto.ResPost read(Long postIdx, Long checkUser) {
-        Post result = pr.findById(postIdx)
-                .orElseThrow(() -> new BaseException(WORKSPACE_NOT_FOUND));
-
         UserPost userPost = upr.findByUser_IdxAndWorkspace_Idx(checkUser, postIdx)
                 .orElseThrow(() -> new BaseException(WORKSPACE_ACCESS_DENIED));
 
-        return PostDto.ResPost.from(result, userPost.getLevel());
+        return PostDto.ResPost.from(userPost.getWorkspace(), userPost.getLevel());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -117,11 +122,8 @@ public class PostService {
         }
 
         if (workspace.getStatus() == isShare.Public) {
-            User user = ur.findById(userIdx)
-                    .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
-
             UserPost relation = upr.save(UserPost.builder()
-                    .user(user)
+                    .user(ur.getReferenceById(userIdx))
                     .workspace(workspace)
                     .Level(AccessRole.WRITE)
                     .build());
@@ -176,41 +178,36 @@ public class PostService {
         }
 
         // 알림 발송 (이메일이 있을 때)
+        User invitee = null;
         if (email != null) {
-            User invitee = ur.findByEmail(email)
+            invitee = ur.findByEmail(email)
                     .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
             ns.sendWorkspaceInviteNotification(invitee.getIdx(), uuid, post.getTitle());
         }
 
         // Shared 상태 + 이메일 초대 → 이메일 인증 링크 발송
         if (email != null && post.getStatus() == isShare.Shared) {
-            User invitedUser = ur.findByEmail(email)
-                    .orElseThrow(() -> new BaseException(USER_NOT_REGISTERED));
-
-            if(!evr.findByToken(uuid).isPresent()) {
+            if (!evr.existsByToken(uuid)) {
                 evr.save(new EmailVerify(uuid, email));
             }
-            evs.sendVerificationEmail(email, invitedUser.getName(), uuid);
+            evs.sendVerificationEmail(email, invitee != null ? invitee.getName() : user.getName(), uuid);
             return SUCCESS;
         }
 
         // Public 워크스페이스 → 현재 사용자 즉시 참여
-        User checkUser = ur.findByEmail(user.getEmail())
-                .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
-
         Optional<UserPost> relation =
-                upr.findByUser_IdxAndWorkspace_Idx(checkUser.getIdx(), post.getIdx());
+                upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), post.getIdx());
 
         if(email != null) {
-            if(!evr.findByToken(uuid).isPresent()) {
+            if (!evr.existsByToken(uuid)) {
                 evr.save(new EmailVerify(uuid, email));
             }
-            evs.sendVerificationEmail(email, checkUser.getName(), uuid);
+            evs.sendVerificationEmail(email, user.getName(), uuid);
         }
 
         if (post.getStatus() == isShare.Public && relation.isEmpty()) {
             upr.save(UserPost.builder()
-                    .user(checkUser)
+                    .user(ur.getReferenceById(user.getIdx()))
                     .workspace(post)
                     .Level(AccessRole.READ)
                     .build());
@@ -225,11 +222,11 @@ public class PostService {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Transactional
-    public BaseResponseStatus verifyEmail(User user, String uuid, String type) {
+    public BaseResponseStatus verifyEmail(Long userIdx, String userEmail, String uuid, String type) {
         EmailVerify verificationToken = evr.findByToken(uuid)
                 .orElseThrow(() -> new BaseException(EMAIL_VERIFY_TOKEN_INVALID));
 
-        if (!verificationToken.getEmail().equals(user.getEmail())) {
+        if (userEmail == null || !verificationToken.getEmail().equals(userEmail)) {
             return WORKSPACE_ACCESS_DENIED;
         }
 
@@ -240,13 +237,18 @@ public class PostService {
 
         if (type.equals("reject")) {
             evr.delete(verificationToken);
+            /*
             return INVITE_REJECTED; // 또는 기존 정의된 FAIL 등
+        }
+
+            */
+            return INVITE_REJECTED;
         }
 
         Post result = pr.findByUUID(uuid)
                 .orElseThrow(() -> new BaseException(WORKSPACE_SHARE_ENDED));
 
-        if (upr.findByUser_IdxAndWorkspace_Idx(user.getIdx(), result.getIdx()).isPresent()) {
+        if (upr.findByUser_IdxAndWorkspace_Idx(userIdx, result.getIdx()).isPresent()) {
             evr.delete(verificationToken);
             return ALREADY_JOINED;
         }
@@ -255,7 +257,7 @@ public class PostService {
 
         if (result.getStatus() != isShare.Private) {
             upr.save(UserPost.builder()
-                    .user(user)
+                    .user(ur.getReferenceById(userIdx))
                     .workspace(result)
                     .Level(AccessRole.WRITE)
                     .build());
@@ -384,21 +386,43 @@ public class PostService {
             throw new BaseException(WORKSPACE_SHARE_NOT_ALLOWED);
         }
 
+        List<Long> normalizedTargetIds = targetUserIds == null
+                ? List.of()
+                : targetUserIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (normalizedTargetIds.isEmpty()) {
+            return 0;
+        }
+
+        java.util.Set<Long> existingTargetIds = upr.findAllByWorkspaceIdAndUserIdsExceptAdmin(
+                        normalizedTargetIds,
+                        postIdx,
+                        actorUserIdx
+                ).stream()
+                .map(userPost -> userPost.getUser().getIdx())
+                .collect(java.util.stream.Collectors.toSet());
+
+        Map<Long, User> targetUserById = new java.util.HashMap<>();
+        ur.findAllById(normalizedTargetIds).forEach(user -> targetUserById.put(user.getIdx(), user));
+
+        boolean tokenExists = evr.existsByToken(workspace.getUUID());
         int affectedCount = 0;
-        for (Long targetUserId : targetUserIds == null ? List.<Long>of() : targetUserIds.stream().filter(Objects::nonNull).distinct().toList()) {
-            if (Objects.equals(actorUserIdx, targetUserId)) {
+        for (Long targetUserId : normalizedTargetIds) {
+            if (Objects.equals(actorUserIdx, targetUserId) || existingTargetIds.contains(targetUserId)) {
                 continue;
             }
 
-            if (upr.findByUser_IdxAndWorkspace_Idx(targetUserId, postIdx).isPresent()) {
-                continue;
+            User targetUser = targetUserById.get(targetUserId);
+            if (targetUser == null) {
+                throw new BaseException(USER_NOT_FOUND);
             }
 
-            User targetUser = ur.findById(targetUserId)
-                    .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
-
-            if(!evr.findByToken(workspace.getUUID()).isPresent()) {
+            if (!tokenExists) {
                 evr.save(new EmailVerify(workspace.getUUID(), targetUser.getEmail()));
+                tokenExists = true;
             }
             ns.sendWorkspaceInviteNotification(targetUser.getIdx(), workspace.getUUID(), workspace.getTitle());
             affectedCount += 1;

@@ -168,6 +168,7 @@ public class ChatRoomService {
     }
 
 
+    @Transactional(readOnly = true)
     public ChatRoomsDto.PageRes list(int page, int size, Long userIdx) {
         ChatRoomsDto.PageRes cached = chatListCacheService.get(userIdx, page, size);
         if (cached != null) {

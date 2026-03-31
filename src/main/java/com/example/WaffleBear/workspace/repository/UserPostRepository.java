@@ -2,6 +2,7 @@ package com.example.WaffleBear.workspace.repository;
 
 import com.example.WaffleBear.user.model.User;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +14,7 @@ public interface UserPostRepository extends JpaRepository<UserPost, Long> {
     @Query("SELECT up FROM UserPost up JOIN FETCH up.workspace WHERE up.user.idx = :userId AND up.workspace.idx = :workspaceId")
     Optional<UserPost> findByUser_IdxAndWorkspace_Idx(@Param("userId") Long userId, @Param("workspaceId") Long workspaceId);
 
+    @EntityGraph(attributePaths = {"user"})
     @Query("SELECT up FROM UserPost up JOIN FETCH up.user WHERE up.workspace.idx = :postIdx")
     List<UserPost> findAllByWorkspace_idx(@Param("postIdx") Long postIdx);
 
@@ -25,6 +27,7 @@ public interface UserPostRepository extends JpaRepository<UserPost, Long> {
             "WHERE up.workspace.idx = :workspaceId " +
             "AND up.user.idx IN :userIds " +
             "AND up.user.idx != :adminId")
+    @EntityGraph(attributePaths = {"user"})
     List<UserPost> findAllByWorkspaceIdAndUserIdsExceptAdmin(
             @Param("userIds") List<Long> userIds,
             @Param("workspaceId") Long workspaceId,
@@ -37,6 +40,6 @@ public interface UserPostRepository extends JpaRepository<UserPost, Long> {
 
     // 방법 2: @Query 어노테이션 활용 (성능 및 정확도 면에서 추천)
     // 필요한 User ID만 Long 타입으로 바로 뽑아옵니다.
-    @Query("SELECT up.user.idx FROM UserPost up WHERE up.workspace.idx = :postIdx")
+    @Query("SELECT DISTINCT up.user.idx FROM UserPost up WHERE up.workspace.idx = :postIdx")
     List<Long> findUserIdsByPostIdx(@Param("postIdx") Long postIdx);
 }

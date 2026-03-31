@@ -11,6 +11,10 @@ import lombok.*;
 @Builder
 @Getter
 @Entity
+@Table(indexes = {
+        @Index(name = "idx_user_post_user_workspace", columnList = "user_id,workspace_id"),
+        @Index(name = "idx_user_post_workspace_user", columnList = "workspace_id,user_id")
+})
 public class UserPost {
 
     @Id

@@ -10,9 +10,11 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,6 +27,12 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(indexes = {
+        @Index(name = "idx_workspace_asset_workspace", columnList = "workspace_idx"),
+        @Index(name = "idx_workspace_asset_uploader", columnList = "uploader_idx"),
+        @Index(name = "idx_workspace_asset_created", columnList = "created_at"),
+        @Index(name = "idx_workspace_asset_object_key", columnList = "object_key")
+})
 public class WorkspaceAsset {
 
     @Id

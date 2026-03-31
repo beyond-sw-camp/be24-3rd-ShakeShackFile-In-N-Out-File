@@ -11,6 +11,9 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(indexes = {
+        @Index(name = "idx_chat_rooms_last_message_time", columnList = "last_message_time")
+})
 public class ChatRooms {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

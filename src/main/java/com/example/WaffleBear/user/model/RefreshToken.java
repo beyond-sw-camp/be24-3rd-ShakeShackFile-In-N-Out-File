@@ -13,6 +13,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(indexes = {
+        @Index(name = "idx_refresh_token_token", columnList = "token"),
+        @Index(name = "idx_refresh_token_expiry", columnList = "expiryDate")
+})
 public class RefreshToken {
 
     @Id

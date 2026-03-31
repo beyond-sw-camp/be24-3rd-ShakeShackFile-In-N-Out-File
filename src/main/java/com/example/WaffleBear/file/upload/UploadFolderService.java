@@ -15,19 +15,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 public class UploadFolderService {
 
     private final FileUpDownloadRepository fileUpDownloadRepository;
-    private final Object folderCreationMonitor = new Object();
+    private final ConcurrentHashMap<String, Object> folderLocks = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Object> uploadLocks = new ConcurrentHashMap<>();
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public FileInfo findOrCreateCommittedFolder(Long userIdx, Long parentId, String folderName) {
-        synchronized (folderCreationMonitor) {
-            return findOrCreateFolder(userIdx, parentId, folderName);
-        }
+        return findOrCreateFolder(userIdx, parentId, folderName);
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
@@ -39,7 +39,10 @@ public class UploadFolderService {
             long fileSize,
             String finalObjectKey
     ) {
-        synchronized (folderCreationMonitor) {
+        String uploadLockKey = finalObjectKey == null ? "" : finalObjectKey;
+        Object uploadLock = uploadLocks.computeIfAbsent(uploadLockKey, ignored -> new Object());
+
+        synchronized (uploadLock) {
             Optional<FileInfo> existing = fileUpDownloadRepository.findByUser_IdxAndFileSavePath(userIdx, finalObjectKey);
             if (existing.isPresent()) {
                 return existing.get();
@@ -100,35 +103,40 @@ public class UploadFolderService {
     }
 
     private FileInfo findOrCreateFolder(Long userIdx, Long parentId, String folderName) {
-        Optional<FileInfo> existing = parentId == null
-                ? fileUpDownloadRepository.findByUser_IdxAndParentIsNullAndFileOriginNameAndTrashedFalse(userIdx, folderName)
-                : fileUpDownloadRepository.findByUser_IdxAndParent_IdxAndFileOriginNameAndTrashedFalse(userIdx, parentId, folderName);
+        String lockKey = buildFolderLockKey(userIdx, parentId, folderName);
+        Object lock = folderLocks.computeIfAbsent(lockKey, ignored -> new Object());
 
-        if (existing.isPresent()) {
-            FileInfo folder = existing.get();
-            if (resolveNodeType(folder) != FileNodeType.FOLDER) {
-                throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+        synchronized (lock) {
+            Optional<FileInfo> existing = parentId == null
+                    ? fileUpDownloadRepository.findByUser_IdxAndParentIsNullAndFileOriginNameAndTrashedFalse(userIdx, folderName)
+                    : fileUpDownloadRepository.findByUser_IdxAndParent_IdxAndFileOriginNameAndTrashedFalse(userIdx, parentId, folderName);
+
+            if (existing.isPresent()) {
+                FileInfo folder = existing.get();
+                if (resolveNodeType(folder) != FileNodeType.FOLDER) {
+                    throw BaseException.from(BaseResponseStatus.REQUEST_ERROR);
+                }
+                return folder;
             }
-            return folder;
+
+            FileInfo parent = resolveParentFolder(userIdx, parentId);
+            FileInfo entity = FileInfo.builder()
+                    .user(User.builder().idx(userIdx).build())
+                    .parent(parent)
+                    .nodeType(FileNodeType.FOLDER)
+                    .fileOriginName(folderName)
+                    .fileFormat("folder")
+                    .fileSaveName("folder-" + UUID.randomUUID())
+                    .fileSavePath(null)
+                    .fileSize(0L)
+                    .lockedFile(false)
+                    .sharedFile(false)
+                    .trashed(false)
+                    .deletedAt(null)
+                    .build();
+
+            return fileUpDownloadRepository.saveAndFlush(entity);
         }
-
-        FileInfo parent = resolveParentFolder(userIdx, parentId);
-        FileInfo entity = FileInfo.builder()
-                .user(User.builder().idx(userIdx).build())
-                .parent(parent)
-                .nodeType(FileNodeType.FOLDER)
-                .fileOriginName(folderName)
-                .fileFormat("folder")
-                .fileSaveName("folder-" + UUID.randomUUID())
-                .fileSavePath(null)
-                .fileSize(0L)
-                .lockedFile(false)
-                .sharedFile(false)
-                .trashed(false)
-                .deletedAt(null)
-                .build();
-
-        return fileUpDownloadRepository.saveAndFlush(entity);
     }
 
     private FileInfo resolveParentFolder(Long userIdx, Long parentId) {
@@ -173,5 +181,9 @@ public class UploadFolderService {
             return finalObjectKey;
         }
         return finalObjectKey.substring(separatorIndex + 1);
+    }
+
+    private String buildFolderLockKey(Long userIdx, Long parentId, String folderName) {
+        return userIdx + ":" + (parentId == null ? "root" : parentId) + ":" + folderName;
     }
 }

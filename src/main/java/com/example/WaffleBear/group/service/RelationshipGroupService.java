@@ -138,7 +138,7 @@ public class RelationshipGroupService {
         group.rename(nextName);
         relationshipGroupRepository.save(group);
 
-        long relationshipCount = relationshipGroupMappingRepository.findAllByGroup_Id(groupId).size();
+        long relationshipCount = relationshipGroupMappingRepository.countByGroup_Id(groupId);
         return RelationshipGroupDto.GroupSummary.from(group, relationshipCount);
     }
 

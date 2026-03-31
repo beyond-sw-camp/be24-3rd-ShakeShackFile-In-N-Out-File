@@ -4,6 +4,7 @@ import com.example.WaffleBear.chat.model.entity.ChatMessages;
 import com.example.WaffleBear.chat.model.entity.ChatRooms;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -31,6 +32,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
         Long getStoredBytes();
     }
 
+    @EntityGraph(attributePaths = {"sender"})
     Page<ChatMessages> findAllByChatRooms(ChatRooms room, Pageable pageable);
     Optional<ChatMessages> findTopByChatRoomsIdxOrderByCreatedAtDesc(Long roomIdx);
     Page<ChatMessages> findByChatRoomsIdxAndCreatedAtAfterOrderByCreatedAtAsc(
@@ -51,6 +53,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
     @Query("DELETE FROM ChatMessages m WHERE m.chatRooms.idx = :roomIdx")
     void deleteAllByChatRoomsIdx(Long roomIdx);
 
+    @EntityGraph(attributePaths = {"sender"})
     Page<ChatMessages> findAllByChatRoomsAndCreatedAtAfter(ChatRooms room, LocalDateTime joinedAt, Pageable pageable);
     long countByChatRoomsIdxAndIdxGreaterThanAndCreatedAtAfter(
             Long chatRoomsIdx, Long idx, LocalDateTime createdAt
@@ -90,6 +93,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessages, Long>
             @Param("messageIds") Collection<Long> messageIds
     );
 
+    @EntityGraph(attributePaths = {"sender"})
     Optional<ChatMessages> findByIdxAndChatRoomsIdx(Long messageIdx, Long roomIdx);
 
     @Query("""

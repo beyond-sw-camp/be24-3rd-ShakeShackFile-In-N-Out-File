@@ -3,12 +3,14 @@ package com.example.WaffleBear.workspace.model.post;
 import com.example.WaffleBear.workspace.model.relation.UserPost;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Index;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,6 +25,9 @@ import java.util.List;
 @Builder
 @Getter
 @Entity
+@Table(indexes = {
+        @Index(name = "idx_post_uuid", columnList = "UUID")
+})
 public class Post {
 
     @Id

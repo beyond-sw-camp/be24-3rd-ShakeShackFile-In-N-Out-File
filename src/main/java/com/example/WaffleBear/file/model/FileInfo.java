@@ -14,6 +14,12 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(indexes = {
+        @Index(name = "idx_file_info_user_parent", columnList = "user_idx,parent_idx"),
+        @Index(name = "idx_file_info_user_trashed", columnList = "user_idx,trashed"),
+        @Index(name = "idx_file_info_user_node_trashed", columnList = "user_idx,node_type,trashed"),
+        @Index(name = "idx_file_info_user_modify_upload", columnList = "user_idx,last_modify_date,upload_date")
+})
 public class FileInfo {
 
     @Id

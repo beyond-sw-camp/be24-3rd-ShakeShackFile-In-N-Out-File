@@ -1,17 +1,17 @@
 portone:
   portone_secret: ${PORTONE_SECRET:}
 
-server:
- port: 443
- error:
-   whitelabel:
-     enabled: false  # 기본 whitelabel 에러 페이지 비활성화
-   path: /error
- ssl:
-   enabled: true
-   key-store: ${KEYSTORE}
-   key-store-type: ${KEYSTORETYPE}
-   key-store-password: ${KEYSTOREPASS}
+#server:
+# port: 443
+# error:
+#   whitelabel:
+#     enabled: false  # 기본 whitelabel 에러 페이지 비활성화
+#   path: /error
+# ssl:
+#   enabled: true
+#   key-store: ${KEYSTORE}
+#   key-store-type: ${KEYSTORETYPE}
+#   key-store-password: ${KEYSTOREPASS}
 
 
 jwt:

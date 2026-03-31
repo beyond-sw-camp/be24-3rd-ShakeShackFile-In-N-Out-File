@@ -21,6 +21,8 @@ public interface RelationshipGroupMappingRepository extends JpaRepository<Relati
     @EntityGraph(attributePaths = {"relationship", "relationship.targetUser", "group"})
     List<RelationshipGroupMapping> findAllByGroup_Id(Long groupId);
 
+    long countByGroup_Id(Long groupId);
+
     boolean existsByRelationship_IdAndGroup_Id(Long relationshipId, Long groupId);
 
     void deleteByRelationship_IdAndGroup_Id(Long relationshipId, Long groupId);

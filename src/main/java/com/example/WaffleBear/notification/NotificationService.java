@@ -154,6 +154,7 @@ public class NotificationService {
         createAndDispatchNotification(receiverUserIdx, "general", title, message, null, null);
     }
 
+    @Transactional(readOnly = true)
     public List<NotificationDto.InboxItem> getInboxNotifications(Long userIdx) {
         return notificationListRepository.findByReceiverUserIdxOrderByCreatedAtDesc(userIdx)
                 .stream()

@@ -1,6 +1,7 @@
 package com.example.WaffleBear.notification.model;
 
 import jakarta.persistence.*;
+import jakarta.persistence.Index;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,7 +12,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
-@Table(name = "notification")
+@Table(
+        name = "notification",
+        indexes = {
+                @Index(name = "idx_notification_user_active", columnList = "user_idx,is_active"),
+                @Index(name = "idx_notification_endpoint", columnList = "endpoint")
+        }
+)
 public class NotificationEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -26,9 +26,15 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -64,7 +70,7 @@ public class FeaterService {
         String displayName = normalizeDisplayName(request.getDisplayName());
 
         settings.update(
-                normalizeDisplayName(request.getDisplayName()),
+                displayName,
                 normalizeLocaleCode(request.getLocaleCode()),
                 normalizeRegionCode(request.getRegionCode()),
                 request.getMarketingOptIn() != null ? request.getMarketingOptIn() : Boolean.TRUE,
@@ -358,8 +364,36 @@ public class FeaterService {
         return value.matches("[A-Za-z0-9._-]+");
     }
 
+    public Map<Long, String> resolveProfileImages(Collection<Long> userIdxs) {
+        if (userIdxs == null || userIdxs.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> normalizedUserIdxs = userIdxs.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (normalizedUserIdxs.isEmpty()) {
+            return Map.of();
+        }
+
+        return featerRepository.findAllByUser_IdxIn(normalizedUserIdxs).stream()
+                .filter(feater -> feater.getUser() != null && feater.getUser().getIdx() != null)
+                .collect(Collectors.toMap(
+                        feater -> feater.getUser().getIdx(),
+                        feater -> resolveProfileImagePreview(feater.getProfileImageUrl()),
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+    }
+
     // 채팅에서 쓸 프로필사진
     public String resolveProfileImage(Long userIdx) {
+        if (userIdx == null) {
+            return null;
+        }
+
         return featerRepository.findByUser_Idx(userIdx)
                 .map(f -> resolveProfileImagePreview(f.getProfileImageUrl()))
                 .orElse(null);

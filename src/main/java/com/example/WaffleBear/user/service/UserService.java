@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -28,8 +29,9 @@ public class UserService implements UserDetailsService {
     private final EmailVerifyService emailVerifyService;
 
 
+    @Transactional
     public UserDto.SignupRes signup(UserDto.SignupReq dto) {
-        if (userRepository.findByEmail(dto.email()).isPresent()) {
+        if (userRepository.existsByEmail(dto.email())) {
             throw BaseException.from(BaseResponseStatus.SIGNUP_DUPLICATE_EMAIL);
         }
 
@@ -45,6 +47,7 @@ public class UserService implements UserDetailsService {
         return UserDto.SignupRes.from(user);
     }
 
+    @Transactional
     public void verifyEmail(String token) {
         EmailVerify verificationToken = emailVerifyRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("invalid verify token"));

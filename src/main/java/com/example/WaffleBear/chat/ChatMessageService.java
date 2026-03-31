@@ -26,10 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -78,19 +78,21 @@ public class ChatMessageService {
         Map<Long, Integer> unreadCountMap = messageIds.isEmpty()
                 ? Map.of()
                 : chatMessageRepository.countUnreadParticipantsByMessageIds(messageIds).stream()
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         ChatMessageRepository.MessageUnreadCountView::getMessageIdx,
                         view -> Math.toIntExact(view.getUnreadCount())
                 ));
 
-        Map<Long, String> profileImageMap = new HashMap<>();
+        Map<Long, String> profileImageMap = featerService.resolveProfileImages(
+                messages.stream()
+                        .map(msg -> msg.getSender() != null ? msg.getSender().getIdx() : null)
+                        .toList()
+        );
+
         List<ChatMessagesDto.ListRes> messageList = messages.stream()
                 .map(msg -> {
                     int messageUnreadCount = unreadCountMap.getOrDefault(msg.getIdx(), 0);
-                    String profileImageUrl = profileImageMap.computeIfAbsent(
-                            msg.getSender().getIdx(),
-                            featerService::resolveProfileImage
-                    );
+                    String profileImageUrl = profileImageMap.get(msg.getSender().getIdx());
                     return ChatMessagesDto.ListRes.from(msg, messageUnreadCount, profileImageUrl);
                 })
                 .toList();

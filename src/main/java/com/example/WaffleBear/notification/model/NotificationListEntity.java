@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,7 +20,13 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "notification_list")
+@Table(
+        name = "notification_list",
+        indexes = {
+                @Index(name = "idx_notification_list_receiver_created", columnList = "receiver_user_idx,created_at"),
+                @Index(name = "idx_notification_list_uuid_receiver", columnList = "uuid,receiver_user_idx")
+        }
+)
 public class NotificationListEntity {
 
     @Id

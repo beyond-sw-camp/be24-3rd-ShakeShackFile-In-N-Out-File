@@ -3,6 +3,7 @@ package com.example.WaffleBear.chat;
 import com.example.WaffleBear.chat.model.entity.ChatParticipants;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -28,6 +29,7 @@ public interface ParticipantsRepository extends JpaRepository<ChatParticipants,L
     WHERE cp.users.idx = :userIdx
     ORDER BY cr.lastMessageTime DESC NULLS LAST
 """)
+    @EntityGraph(attributePaths = {"chatRooms"})
     Page<ChatParticipants> findAllByUsersIdx(Long userIdx, Pageable pageable);
 
     List<ChatParticipants> findAllByUsersIdx(Long userIdx);

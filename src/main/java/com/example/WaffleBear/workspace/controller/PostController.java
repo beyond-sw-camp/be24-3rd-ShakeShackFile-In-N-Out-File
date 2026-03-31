@@ -5,7 +5,6 @@ import com.example.WaffleBear.common.model.BaseResponse;
 import com.example.WaffleBear.common.model.BaseResponseStatus;
 import com.example.WaffleBear.user.model.AuthUserDetails;
 import com.example.WaffleBear.user.model.User;
-import com.example.WaffleBear.user.repository.UserRepository;
 import com.example.WaffleBear.workspace.model.post.PostDto;
 import com.example.WaffleBear.workspace.model.relation.AccessRole;
 import com.example.WaffleBear.workspace.model.relation.UserPostDto;
@@ -30,7 +29,6 @@ import java.util.Map;
 @SecurityRequirement(name = "bearerAuth")
 public class PostController {
 
-    private final UserRepository ur;
     private final PostService ps;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -43,10 +41,7 @@ public class PostController {
             @AuthenticationPrincipal AuthUserDetails user,
             @RequestBody PostDto.ReqPost dto) {
 
-        User writer = ur.findByEmail(user.getEmail())
-                .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
-
-        PostDto.ResPost result = ps.save(dto, writer);
+        PostDto.ResPost result = ps.save(dto, user.getIdx());
         return BaseResponse.success(ResponseEntity.ok(result));
     }
 
@@ -136,10 +131,7 @@ public class PostController {
             @RequestParam("uuid") String uuid,
             @RequestParam("type") String type) {
 
-        User checkUser = ur.findByEmail(user.getEmail())
-                .orElseThrow(() -> new BaseException(USER_NOT_FOUND));
-
-        BaseResponseStatus result = ps.verifyEmail(checkUser, uuid, type);
+        BaseResponseStatus result = ps.verifyEmail(user.getIdx(), user.getEmail(), uuid, type);
         return BaseResponse.success(ResponseEntity.ok(result));
     }
 

@@ -11,6 +11,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
+@Table(indexes = {
+        @Index(name = "idx_chat_participants_room_user", columnList = "chat_rooms_idx,users_idx"),
+        @Index(name = "idx_chat_participants_user_room", columnList = "users_idx,chat_rooms_idx"),
+        @Index(name = "idx_chat_participants_room_last_read", columnList = "chat_rooms_idx,last_read_message_id")
+})
 public class ChatParticipants {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
