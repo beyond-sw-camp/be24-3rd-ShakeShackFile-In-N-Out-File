@@ -1,4 +1,4 @@
-package ngrinder.administrator.dashboard
+package ngrinder.workspace.list
 
 import static net.grinder.script.Grinder.grinder
 import org.junit.Test
@@ -9,19 +9,20 @@ import net.grinder.scriptengine.groovy.junit.annotation.BeforeThread
 
 @RunWith(GrinderRunner)
 class TestRunner {
-    protected static String baseUrl = System.getProperty('baseUrl', 'http://172.18.0.5:8080/administrator') // http://172.18.0.5:8080/administrator
+    protected static String baseUrl = System.getProperty('baseUrl', 'http://172.18.0.5:8080/workspace') // http://172.18.0.5:8080/workspace
     protected static String loginEmail = System.getProperty('loginEmail', 'administrator@administrator.adm')
     protected static String loginPassword = System.getProperty('loginPassword', 'fweiuhfge2232n12@#xSD23@')
 
     protected static net.grinder.script.GTest test
     protected static org.ngrinder.http.HTTPRequest request
 
-    protected String accessToken
-    protected String refreshToken
     protected static volatile String sharedAccessToken
     protected static volatile String sharedRefreshToken
     protected static volatile boolean sharedLoginReady = false
     protected static final Object sharedLoginLock = new Object()
+
+    protected String accessToken
+    protected String refreshToken
 
     static void initProcess(String testName) {
         test = new net.grinder.script.GTest(1, testName)
@@ -310,21 +311,20 @@ class TestRunner {
     }
     @BeforeProcess
     static void beforeProcess() {
-        initProcess("administrator-dashboard")
+        initProcess("workspace-list")
     }
 
     @BeforeThread
     void beforeThread() {
         grinder.statistics.delayReports = true
-        loginEmail = prop('adminLoginEmail', loginEmail)
-        loginPassword = prop('adminLoginPassword', loginPassword)
+
         login()
 
     }
 
     @Test
     void test() {
-        def response = get('/administrator/dashboard')
+        def response = get('/workspace/list')
         assertStatus(response)
     }
 }

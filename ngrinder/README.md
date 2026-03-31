@@ -16,7 +16,8 @@ Each runnable Groovy file is self-contained:
 
 - it logs in during `@BeforeThread`
 - it stores the access token from the login response
-- authenticated requests send `ATOKEN: Bearer <accessToken>`
+- it registers the shared `HTTPRequest` with `GTest` via `test.record(request)` so Grinder records TPS and test counts
+- authenticated requests send `Authorization: Bearer <accessToken>`
 
 ## Shared properties
 
@@ -41,4 +42,4 @@ Optional endpoint-specific properties:
 
 - `notification/delete.groovy` uses `java.net.http.HttpClient` because the nGrinder HTTP client does not expose a DELETE-with-body overload.
 - `sse/connect.groovy` reads only a small number of bytes so the stream does not hang the test thread.
-- The `*-ws.groovy` files are authenticated SockJS info probes that keep `ATOKEN` in play; a full STOMP/WebSocket harness is still needed for message-level tests.
+- The `*-ws.groovy` files are authenticated SockJS info probes that keep `Authorization` in play; a full STOMP/WebSocket harness is still needed for message-level tests.
