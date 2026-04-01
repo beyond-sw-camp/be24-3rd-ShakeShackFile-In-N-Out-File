@@ -15,6 +15,8 @@ class TestRunner {
 
     protected static net.grinder.script.GTest test
     protected static org.ngrinder.http.HTTPRequest request
+    protected static final java.util.concurrent.atomic.AtomicLong sharedDeleteCursor = new java.util.concurrent.atomic.AtomicLong(-1L)
+    protected static final Object sharedDeleteCursorLock = new Object()
 
     protected String accessToken
     protected String refreshToken
@@ -363,6 +365,101 @@ class TestRunner {
         return idxValue instanceof Number ? ((Number) idxValue).longValue() : Long.parseLong(idxValue.toString())
     }
 
+    protected long resolveDeleteStartIdx() {
+        long configuredStartIdx = propLong('workspaceDeleteIdx',
+                propLong('workspaceIdx',
+                        propLong('workspaceAdminIdx', -1L)))
+
+        if (configuredStartIdx >= 0L) {
+            return configuredStartIdx
+        }
+
+        return resolveWorkspaceIdx(true)
+    }
+
+    protected void initializeDeleteCursor() {
+        if (sharedDeleteCursor.get() < 0L) {
+            synchronized (sharedDeleteCursorLock) {
+                if (sharedDeleteCursor.get() < 0L) {
+                    sharedDeleteCursor.set(resolveDeleteStartIdx())
+                }
+            }
+        }
+    }
+
+    protected long reserveDeleteStartIdx() {
+        initializeDeleteCursor()
+        return sharedDeleteCursor.getAndIncrement()
+    }
+
+    protected void advanceDeleteCursor(long nextIdx) {
+        initializeDeleteCursor()
+
+        while (true) {
+            long current = sharedDeleteCursor.get()
+            if (nextIdx <= current) {
+                return
+            }
+
+            if (sharedDeleteCursor.compareAndSet(current, nextIdx)) {
+                return
+            }
+        }
+    }
+
+    protected boolean isWorkspaceAccessDeniedResponse(org.ngrinder.http.HTTPResponse response) {
+        String body = response == null ? null : response.getBodyText()
+        if (body == null || body.isBlank()) {
+            return false
+        }
+
+        try {
+            def parsed = new groovy.json.JsonSlurper().parseText(body)
+            if (parsed instanceof Map && parsed.containsKey('code')) {
+                def code = parsed.code
+                return code != null && code.toString() == '6011'
+            }
+
+            def payload = unwrapResponsePayload(parsed)
+            if (payload instanceof Map && payload.containsKey('code')) {
+                def code = payload.code
+                return code != null && code.toString() == '6011'
+            }
+        } catch (Exception ignored) {
+            // Treat malformed bodies as non-skippable so the failure is visible.
+        }
+
+        return false
+    }
+
+    protected Long deleteWorkspaceByIncrementingIdx(long startIdx) {
+        int maxAttempts = Math.max(1, propInt('workspaceDeleteSearchLimit', 10000))
+        long currentIdx = startIdx
+        org.ngrinder.http.HTTPResponse response = null
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++, currentIdx++) {
+            response = postEmpty('/workspace/delete/' + currentIdx)
+            int status = response.getStatusCode()
+
+            if (status == 200) {
+                grinder.logger.info("Deleted workspace idx={}", currentIdx)
+                advanceDeleteCursor(currentIdx + 1L)
+                return currentIdx
+            }
+
+            boolean skipResponse = status == 403 || status == 404 || (status == 400 && isWorkspaceAccessDeniedResponse(response))
+            if (!skipResponse) {
+                assert false : "Unexpected delete status ${status} for idx ${currentIdx}. Body: ${safeBody(response)}".toString()
+            }
+
+            grinder.logger.debug("Workspace idx={} was not deleted (status={}), trying next idx", currentIdx, status)
+            advanceDeleteCursor(currentIdx + 1L)
+        }
+
+        String lastBody = response == null ? '' : safeBody(response)
+        assert false : "Failed to delete a workspace starting from idx ${startIdx} after ${maxAttempts} attempts. Last response: ${lastBody}".toString()
+    }
+
     @BeforeProcess
     static void beforeProcess() {
         initProcess("workspace-delete")
@@ -373,13 +470,13 @@ class TestRunner {
         grinder.statistics.delayReports = true
 
         login()
+        initializeDeleteCursor()
 
     }
 
     @Test
     void test() {
-        def response = postEmpty('/workspace/delete/' + resolveWorkspaceIdx(true))
-        assertStatus(response)
+        deleteWorkspaceByIncrementingIdx(reserveDeleteStartIdx())
     }
 }
 
