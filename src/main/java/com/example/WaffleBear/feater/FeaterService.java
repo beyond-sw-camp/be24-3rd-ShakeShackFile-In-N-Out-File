@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -378,14 +377,21 @@ public class FeaterService {
             return Map.of();
         }
 
-        return featerRepository.findAllByUser_IdxIn(normalizedUserIdxs).stream()
+        LinkedHashMap<Long, String> profileImageMap = new LinkedHashMap<>();
+
+        featerRepository.findAllByUser_IdxIn(normalizedUserIdxs).stream()
                 .filter(feater -> feater.getUser() != null && feater.getUser().getIdx() != null)
-                .collect(Collectors.toMap(
-                        feater -> feater.getUser().getIdx(),
-                        feater -> resolveProfileImagePreview(feater.getProfileImageUrl()),
-                        (left, right) -> left,
-                        LinkedHashMap::new
-                ));
+                .forEach(feater -> {
+                    Long userIdx = feater.getUser().getIdx();
+                    String profileImageUrl = resolveProfileImagePreview(feater.getProfileImageUrl());
+                    String existingProfileImageUrl = profileImageMap.get(userIdx);
+
+                    if (!profileImageMap.containsKey(userIdx) || (existingProfileImageUrl == null && profileImageUrl != null)) {
+                        profileImageMap.put(userIdx, profileImageUrl);
+                    }
+                });
+
+        return profileImageMap;
     }
 
     // 채팅에서 쓸 프로필사진
