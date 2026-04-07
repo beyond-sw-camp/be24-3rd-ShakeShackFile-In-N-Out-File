@@ -14,7 +14,7 @@
 <table border="0" width="80%">
 <tr>
 <td align="center" colspan="4">
-<b>TEAM MEMBER</b>
+<b>TEAM MEMBERs</b>
 </td>
 </tr>
 <tr>
