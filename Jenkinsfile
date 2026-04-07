@@ -49,7 +49,7 @@ spec:
       steps {
         container('gradle') {
           checkout([$class: 'GitSCM',
-            branches: [[name: '*/main']],
+            branches: [[name: '*/feat/jenkins']],
             userRemoteConfigs: [[url: 'https://github.com/beyond-sw-camp/be24-3rd-ShakeShackFile-In-N-Out-File.git']]
           ])
         }
