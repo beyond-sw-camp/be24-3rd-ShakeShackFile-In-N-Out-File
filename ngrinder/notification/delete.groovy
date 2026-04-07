@@ -9,7 +9,7 @@ import net.grinder.scriptengine.groovy.junit.annotation.BeforeThread
 
 @RunWith(GrinderRunner)
 class TestRunner {
-    protected static String baseUrl = System.getProperty('baseUrl', 'http://172.18.0.5:8080/notification') // http://172.18.0.5:8080/notification
+    protected static String baseUrl = System.getProperty('baseUrl', 'http://192.100.220.17:8080/notification')
     protected static String loginEmail = System.getProperty('loginEmail', 'administrator@administrator.adm')
     protected static String loginPassword = System.getProperty('loginPassword', 'fweiuhfge2232n12@#xSD23@')
 
@@ -18,79 +18,26 @@ class TestRunner {
 
     protected String accessToken
     protected String refreshToken
-    protected static volatile String sharedAccessToken
-    protected static volatile String sharedRefreshToken
-    protected static volatile boolean sharedLoginReady = false
-    protected static final Object sharedLoginLock = new Object()
 
     static void initProcess(String testName) {
         test = new net.grinder.script.GTest(1, testName)
         request = new org.ngrinder.http.HTTPRequest()
-        test.record(request)
     }
 
     protected void login() {
-        if (!sharedLoginReady) {
-            synchronized (sharedLoginLock) {
-                if (!sharedLoginReady) {
-                    int maxAttempts = propInt('login.retry.attempts', 5)
-                    long baseDelayMs = propLong('login.retry.delay.ms', 250L)
-                    long initialJitterMs = java.util.concurrent.ThreadLocalRandom.current().nextLong(500L, 2500L)
-                    org.ngrinder.http.HTTPResponse response = null
+        org.ngrinder.http.HTTPResponse response = request.POST(fullUrl('/login').toString(), [
+                email   : loginEmail,
+                password: loginPassword
+        ])
 
-                    if (initialJitterMs > 0L) {
-                        try {
-                            Thread.sleep(initialJitterMs)
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt()
-                        }
-                    }
+        assertStatus(response, [200])
 
-                    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                        response = request.POST(
-                                fullUrl('/login').toString(),
-                                jsonBytes([
-                                        email   : loginEmail,
-                                        password: loginPassword
-                                ]),
-                                ['Content-Type': 'application/json; charset=UTF-8']
-                        )
+        Map loginResult = new groovy.json.JsonSlurper().parseText(response.getBodyText()) as Map
+        accessToken = loginResult.accessToken as String
+        refreshToken = extractRefreshToken(response)
 
-                        if (response.getStatusCode() == 200) {
-                            Map loginResult = new groovy.json.JsonSlurper().parseText(response.getBodyText()) as Map
-                            accessToken = loginResult.accessToken as String
-                            refreshToken = extractRefreshToken(response)
-
-                            assert accessToken : 'Login response did not include accessToken.'
-                            assert refreshToken : 'Login response did not include refresh cookie.'
-
-                            sharedAccessToken = accessToken
-                            sharedRefreshToken = refreshToken
-                            sharedLoginReady = true
-                            break
-                        }
-
-                        if (response.getStatusCode() < 500 || response.getStatusCode() >= 600 || attempt == maxAttempts) {
-                            break
-                        }
-
-                        long retryDelayMs = Math.min(baseDelayMs * attempt, 1500L) +
-                                java.util.concurrent.ThreadLocalRandom.current().nextLong(0L, 200L)
-                        try {
-                            Thread.sleep(retryDelayMs)
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt()
-                            break
-                        }
-                    }
-
-                    assertStatus(response, [200])
-                }
-            }
-        }
-
-        accessToken = sharedAccessToken
-        refreshToken = sharedRefreshToken
+        assert accessToken : 'Login response did not include accessToken.'
+        assert refreshToken : 'Login response did not include refresh cookie.'
     }
 
     protected String fullUrl(String path) {
@@ -129,7 +76,7 @@ class TestRunner {
     protected Map<String, String> authHeaders(Map<String, String> extra = [:]) {
         Map<String, String> base = [:]
         if (accessToken != null && !accessToken.isBlank()) {
-            base['Authorization'] = "Bearer ${accessToken}".toString()
+            base['ATOKEN'] = "Bearer ${accessToken}".toString()
         }
         return headers(base, extra)
     }
@@ -137,7 +84,7 @@ class TestRunner {
     protected Map<String, String> refreshHeaders(Map<String, String> extra = [:]) {
         Map<String, String> base = authHeaders()
         if (refreshToken != null && !refreshToken.isBlank()) {
-            base['Cookie'] = "refresh=${refreshToken}".toString()
+            base.Cookie = "refresh=${refreshToken}".toString()
         }
         return headers(base, extra)
     }
@@ -261,17 +208,6 @@ class TestRunner {
         return raw == null || raw.isBlank() ? defaultValue : raw
     }
 
-    protected String uniqueSuffix() {
-        return java.util.UUID.randomUUID().toString().replace('-', '').substring(0, 8)
-    }
-
-    protected String uniqueValue(String prefix) {
-        return "${prefix}-${uniqueSuffix()}".toString()
-    }
-
-    protected String uniqueEmail(String prefix = 'ngrinder') {
-        return "${prefix}.${uniqueSuffix()}@example.com".toString()
-    }
     protected void assertStatus(org.ngrinder.http.HTTPResponse response, List<Integer> allowedStatuses = [200]) {
         int status = response.getStatusCode()
         assert allowedStatuses.contains(status) : "Unexpected status ${status}. Body: ${safeBody(response)}".toString()
@@ -329,7 +265,7 @@ class TestRunner {
         ]
 
         def deleteRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create(fullUrl('/notification').toString()))
-                .header('Authorization', 'Bearer ' + accessToken)
+                .header('ATOKEN', 'Bearer ' + accessToken)
                 .header('Content-Type', 'application/json; charset=UTF-8')
                 .method('DELETE', java.net.http.HttpRequest.BodyPublishers.ofString(
                         groovy.json.JsonOutput.toJson(payload),

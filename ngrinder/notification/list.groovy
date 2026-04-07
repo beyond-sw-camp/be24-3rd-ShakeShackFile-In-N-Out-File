@@ -9,7 +9,7 @@ import net.grinder.scriptengine.groovy.junit.annotation.BeforeThread
 
 @RunWith(GrinderRunner)
 class TestRunner {
-    protected static String baseUrl = System.getProperty('baseUrl', 'http://172.18.0.5:8080/notification') // http://172.18.0.5:8080/notification
+    protected static String baseUrl = System.getProperty('baseUrl', 'http://192.100.220.17:8080')
     protected static String loginEmail = System.getProperty('loginEmail', 'administrator@administrator.adm')
     protected static String loginPassword = System.getProperty('loginPassword', 'fweiuhfge2232n12@#xSD23@')
 
@@ -18,99 +18,31 @@ class TestRunner {
 
     protected String accessToken
     protected String refreshToken
-    protected static volatile String sharedAccessToken
-    protected static volatile String sharedRefreshToken
-    protected static volatile boolean sharedLoginReady = false
-    protected static final Object sharedLoginLock = new Object()
 
     static void initProcess(String testName) {
         test = new net.grinder.script.GTest(1, testName)
         request = new org.ngrinder.http.HTTPRequest()
-        test.record(request)
     }
 
     protected void login() {
-        if (!sharedLoginReady) {
-            synchronized (sharedLoginLock) {
-                if (!sharedLoginReady) {
-                    int maxAttempts = propInt('login.retry.attempts', 5)
-                    long baseDelayMs = propLong('login.retry.delay.ms', 250L)
-                    long initialJitterMs = java.util.concurrent.ThreadLocalRandom.current().nextLong(500L, 2500L)
-                    org.ngrinder.http.HTTPResponse response = null
+        // JSON 형식으로 로그인 요청 (헤더 포함)
+        org.ngrinder.http.HTTPResponse response = request.POST(
+            fullUrl('/login').toString(),
+            jsonBytes([
+                email   : loginEmail,
+                password: loginPassword
+            ]),
+            ['Content-Type': 'application/json; charset=UTF-8']
+        )
 
-                    if (initialJitterMs > 0L) {
-                        try {
-                            Thread.sleep(initialJitterMs)
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt()
-                        }
-                    }
+        assertStatus(response, [200])
 
-                    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                        response = request.POST(
-                                fullUrl('/login').toString(),
-                                jsonBytes([
-                                        email   : loginEmail,
-                                        password: loginPassword
-                                ]),
-                                ['Content-Type': 'application/json; charset=UTF-8']
-                        )
+        Map loginResult = new groovy.json.JsonSlurper().parseText(response.getBodyText()) as Map
+        accessToken = loginResult.accessToken as String
+        refreshToken = extractRefreshToken(response)
 
-                        if (response == null) {
-                            grinder.logger.info("Login request returned no response on attempt {}.", attempt)
-                            continue
-                        }
-
-                        if (response.getStatusCode() == 200) {
-                            Map loginResult = new groovy.json.JsonSlurper().parseText(response.getBodyText()) as Map
-                            String issuedAccessToken = loginResult.accessToken as String
-                            String issuedRefreshToken = extractRefreshToken(response)
-
-                            if (issuedAccessToken == null || issuedAccessToken.isBlank()
-                                    || issuedRefreshToken == null || issuedRefreshToken.isBlank()) {
-                                grinder.logger.info(
-                                        "Login response was 200 but missing tokens. Body: {}",
-                                        safeBody(response)
-                                )
-                                continue
-                            }
-
-                            accessToken = issuedAccessToken
-                            refreshToken = issuedRefreshToken
-
-                            sharedAccessToken = accessToken
-                            sharedRefreshToken = refreshToken
-                            sharedLoginReady = true
-                            break
-                        }
-
-                        if (response.getStatusCode() < 500 || response.getStatusCode() >= 600 || attempt == maxAttempts) {
-                            break
-                        }
-
-                        long retryDelayMs = Math.min(baseDelayMs * attempt, 1500L) +
-                                java.util.concurrent.ThreadLocalRandom.current().nextLong(0L, 200L)
-                        try {
-                            Thread.sleep(retryDelayMs)
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt()
-                            break
-                        }
-                    }
-
-                    if (!sharedLoginReady) {
-                        grinder.logger.info(
-                                "Login bypassed after status {}. Body: {}",
-                                response == null ? 'null' : response.getStatusCode(),
-                                response == null ? '' : safeBody(response)
-                        )
-                    }
-                }
-            }
-        }
-
-        accessToken = sharedAccessToken
-        refreshToken = sharedRefreshToken
+        assert accessToken : 'Login response did not include accessToken.'
+        assert refreshToken : 'Login response did not include refresh cookie.'
     }
 
     protected String fullUrl(String path) {
@@ -120,24 +52,7 @@ class TestRunner {
         if (path.startsWith('http://') || path.startsWith('https://')) {
             return path
         }
-
-        java.net.URI baseUri = java.net.URI.create(baseUrl)
-        String origin = "${baseUri.scheme}://${baseUri.authority}"
-        String basePath = baseUri.path ?: ''
-        String normalizedPath = path.startsWith('/') ? path : "/${path}"
-
-        if (normalizedPath == '/login'
-                || normalizedPath.startsWith('/oauth2')
-                || normalizedPath.startsWith('/login/oauth2')
-                || normalizedPath.startsWith('/auth')) {
-            return "${origin}${normalizedPath}".toString()
-        }
-
-        if (basePath == null || basePath.isBlank() || normalizedPath.startsWith(basePath)) {
-            return "${origin}${normalizedPath}".toString()
-        }
-
-        return "${baseUrl}${normalizedPath}".toString()
+        return ("${baseUrl}${path.startsWith('/') ? '' : '/'}${path}").toString()
     }
 
     protected Map<String, String> headers(Map<String, String> base = [:], Map<String, String> extra = [:]) {
@@ -150,7 +65,7 @@ class TestRunner {
     protected Map<String, String> authHeaders(Map<String, String> extra = [:]) {
         Map<String, String> base = [:]
         if (accessToken != null && !accessToken.isBlank()) {
-            // 'Authorization' 대신 'Authorization' 사용
+            // 'ATOKEN' 대신 'Authorization' 사용
             base['Authorization'] = ("Bearer ${accessToken}").toString()
         }
         return headers(base, extra)
@@ -283,17 +198,6 @@ class TestRunner {
         return raw == null || raw.isBlank() ? defaultValue : raw
     }
 
-    protected String uniqueSuffix() {
-        return java.util.UUID.randomUUID().toString().replace('-', '').substring(0, 8)
-    }
-
-    protected String uniqueValue(String prefix) {
-        return "${prefix}-${uniqueSuffix()}".toString()
-    }
-
-    protected String uniqueEmail(String prefix = 'ngrinder') {
-        return "${prefix}.${uniqueSuffix()}@example.com".toString()
-    }
     protected void assertStatus(org.ngrinder.http.HTTPResponse response, List<Integer> allowedStatuses = [200]) {
         int status = response.getStatusCode()
         assert allowedStatuses.contains(status) : ("Unexpected status ${status}. Body: ${safeBody(response)}").toString()
@@ -331,90 +235,6 @@ class TestRunner {
         return json.getBytes(java.nio.charset.StandardCharsets.UTF_8)
     }
 
-    protected String extractAuthorizationToken(org.ngrinder.http.HTTPResponse response) {
-        def authHeaders = response.getHeaders('Authorization')
-        if (authHeaders == null) {
-            return null
-        }
-
-        for (def header : authHeaders) {
-            String value = header.getValue()
-            if (value == null || value.isBlank()) {
-                continue
-            }
-            if (value.startsWith('Bearer ')) {
-                return value.substring('Bearer '.length()).trim()
-            }
-            return value.trim()
-        }
-
-        return null
-    }
-
-    protected void syncSharedTokens() {
-        if (sharedAccessToken != null && !sharedAccessToken.isBlank()) {
-            accessToken = sharedAccessToken
-        }
-        if (sharedRefreshToken != null && !sharedRefreshToken.isBlank()) {
-            refreshToken = sharedRefreshToken
-        }
-    }
-
-    protected boolean reissueTokens() {
-        synchronized (sharedLoginLock) {
-            syncSharedTokens()
-
-            if (refreshToken == null || refreshToken.isBlank()) {
-                return false
-            }
-
-            org.ngrinder.http.HTTPResponse response = postEmpty('/auth/reissue', refreshHeaders())
-            if (response == null) {
-                return false
-            }
-            if (response.getStatusCode() != 200) {
-                return false
-            }
-
-            String issuedAccessToken = extractAuthorizationToken(response)
-            String issuedRefreshToken = extractRefreshToken(response)
-
-            if (issuedAccessToken != null && !issuedAccessToken.isBlank()) {
-                accessToken = issuedAccessToken
-                sharedAccessToken = issuedAccessToken
-            }
-
-            if (issuedRefreshToken != null && !issuedRefreshToken.isBlank()) {
-                refreshToken = issuedRefreshToken
-                sharedRefreshToken = issuedRefreshToken
-            }
-
-            return accessToken != null && !accessToken.isBlank()
-        }
-    }
-
-    protected org.ngrinder.http.HTTPResponse fetchNotificationList() {
-        syncSharedTokens()
-        org.ngrinder.http.HTTPResponse response = get('/list', [:], refreshHeaders())
-        if (response == null) {
-            return null
-        }
-
-        if (response.getStatusCode() == 200) {
-            return response
-        }
-
-        if (refreshToken != null && !refreshToken.isBlank() && reissueTokens()) {
-            org.ngrinder.http.HTTPResponse retryResponse = get('/list', [:], refreshHeaders())
-            if (retryResponse == null) {
-                return null
-            }
-            return retryResponse
-        }
-
-        return response
-    }
-
     @BeforeProcess
     static void beforeProcess() {
         initProcess("notification-list")
@@ -428,25 +248,7 @@ class TestRunner {
 
     @Test
     void test() {
-        def response = fetchNotificationList()
-        if (response == null) {
-            grinder.logger.info("Notification list skipped because no response was returned.")
-            return
-        }
-
-        if (response.getStatusCode() != 200) {
-            grinder.logger.info(
-                    "Notification list bypassed after status {}. Body: {}",
-                    response.getStatusCode(),
-                    safeBody(response)
-            )
-            return
-        }
-
-        try {
-            new groovy.json.JsonSlurper().parseText(response.getBodyText())
-        } catch (Exception ignored) {
-            grinder.logger.info("Notification list returned a non-JSON payload, but the request itself succeeded.")
-        }
+        def response = get('/notification/list')
+        assertStatus(response)
     }
 }

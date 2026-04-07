@@ -32,7 +32,7 @@ import java.util.List;
 )
 public class SwaggerConfig {
 
-    @Value("${app.backend-url:http://localhost:8080}")
+    @Value("${app.backend-url:http://localhost/api}")
     private String backendUrl;
 
     @Bean
@@ -120,7 +120,7 @@ public class SwaggerConfig {
     public GroupedOpenApi chatApi() {
         return GroupedOpenApi.builder()
                 .group("chat")
-                .pathsToMatch("/chat/**", "/chatRoom/**", "/api/sse/**")
+                .pathsToMatch("/chat/**", "/chatRoom/**", "/sse/**")
                 .build();
     }
 
@@ -136,7 +136,7 @@ public class SwaggerConfig {
     public GroupedOpenApi orderApi() {
         return GroupedOpenApi.builder()
                 .group("order")
-                .pathsToMatch("/api/orders/**")
+                .pathsToMatch("/orders/**")
                 .build();
     }
 

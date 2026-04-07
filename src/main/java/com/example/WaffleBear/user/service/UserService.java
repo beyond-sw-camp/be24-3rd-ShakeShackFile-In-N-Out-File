@@ -37,10 +37,10 @@ public class UserService implements UserDetailsService {
         user.setPassword(passwordEncoder.encode(dto.password()));
 
         String token = UUID.randomUUID().toString();
-//        emailVerifyRepository.save(new EmailVerify(token, user.getEmail()));
+        emailVerifyRepository.save(new EmailVerify(token, user.getEmail()));
 
         userRepository.save(user);
-//        emailVerifyService.sendVerificationEmail(user.getEmail(), token);
+        emailVerifyService.sendVerificationEmail(user.getEmail(), token);
 
         return UserDto.SignupRes.from(user);
     }

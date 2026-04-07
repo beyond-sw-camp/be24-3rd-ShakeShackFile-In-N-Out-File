@@ -61,7 +61,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
                 // CONNECT 시 토큰 파싱해서 유저 등록
                 if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-                    String token = accessor.getFirstNativeHeader("Authorization");
+                    String token = accessor.getFirstNativeHeader("ATOKEN");
+                    if (token == null || token.isBlank()) {
+                        token = accessor.getFirstNativeHeader("Authorization");
+                    }
                     if (token != null && token.startsWith("Bearer ")) {
                         token = token.replace("Bearer ", "");
                         try {

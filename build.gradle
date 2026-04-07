@@ -1,7 +1,16 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '3.5.11'
-	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.springframework.boot' version '3.2.5'
+	id 'io.spring.dependency-management' version '1.1.4'
+	id 'com.palantir.docker' version '0.36.0'
+}
+
+docker {
+	println(tasks.bootJar.outputs.files)
+	name "lumisia/backend:" + version
+	dockerfile file('./backend.dockerfile')
+	files tasks.bootJar.outputs.files
+	buildArgs(['JAR_FILE': tasks.bootJar.archiveFileName.get()])
 }
 
 group = 'com.example'
@@ -25,13 +34,15 @@ repositories {
 }
 
 dependencies {
+	// 최상단에 추가
+	implementation 'org.jspecify:jspecify:1.0.0'
 
 	implementation 'org.springframework.boot:spring-boot-starter-aop'
 
-	//redis
+	// Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-	// Jaeger
+	// Jaeger (OpenTelemetry)
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'io.micrometer:micrometer-tracing-bridge-otel'
 	implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
@@ -44,7 +55,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
 	// JPA
-	implementation "org.mariadb.jdbc:mariadb-java-client:3.4.2"
+	implementation 'org.mariadb.jdbc:mariadb-java-client:3.3.3'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 
 	// Security
@@ -53,7 +64,7 @@ dependencies {
 
 	// WebMvc
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.15'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 
 	// Lombok
 	compileOnly 'org.projectlombok:lombok'
@@ -62,23 +73,24 @@ dependencies {
 	// Mail
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
 
-	// test
+	// Test
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
 	// JWT
-	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-	implementation 'io.jsonwebtoken:jjwt-impl:0.12.6'
-	implementation 'io.jsonwebtoken:jjwt-orgjson:0.12.6'
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+	implementation 'io.jsonwebtoken:jjwt-impl:0.12.3'
+	implementation 'io.jsonwebtoken:jjwt-orgjson:0.12.3'
 
 	// MinIO
-	implementation 'io.minio:minio:8.5.17'
+	implementation 'io.minio:minio:8.5.7'
 
 	// Video thumbnail
 	implementation 'org.jcodec:jcodec:0.2.5'
 	implementation 'org.jcodec:jcodec-javase:0.2.5'
 
+	// Portone
 	implementation 'io.portone:server-sdk:0.23.0'
 }
 

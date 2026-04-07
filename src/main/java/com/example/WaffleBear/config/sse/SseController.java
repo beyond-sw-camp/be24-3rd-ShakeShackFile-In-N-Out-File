@@ -15,7 +15,7 @@ import java.io.IOException;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/sse")
+@RequestMapping("/sse")
 @Tag(name = "Realtime", description = "Realtime event stream APIs")
 @SecurityRequirement(name = "bearerAuth")
 public class SseController {

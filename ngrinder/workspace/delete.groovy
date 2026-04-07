@@ -9,90 +9,35 @@ import net.grinder.scriptengine.groovy.junit.annotation.BeforeThread
 
 @RunWith(GrinderRunner)
 class TestRunner {
-    protected static String baseUrl = System.getProperty('baseUrl', 'http://172.18.0.5:8080/workspace') // http://172.18.0.5:8080/workspace
+    protected static String baseUrl = System.getProperty('baseUrl', 'http://192.100.220.17:8080/workspace')
     protected static String loginEmail = System.getProperty('loginEmail', 'administrator@administrator.adm')
     protected static String loginPassword = System.getProperty('loginPassword', 'fweiuhfge2232n12@#xSD23@')
 
     protected static net.grinder.script.GTest test
     protected static org.ngrinder.http.HTTPRequest request
-    protected static final java.util.concurrent.atomic.AtomicLong sharedDeleteCursor = new java.util.concurrent.atomic.AtomicLong(-1L)
-    protected static final Object sharedDeleteCursorLock = new Object()
 
     protected String accessToken
     protected String refreshToken
-    protected static volatile String sharedAccessToken
-    protected static volatile String sharedRefreshToken
-    protected static volatile boolean sharedLoginReady = false
-    protected static final Object sharedLoginLock = new Object()
 
     static void initProcess(String testName) {
         test = new net.grinder.script.GTest(1, testName)
         request = new org.ngrinder.http.HTTPRequest()
-        test.record(request)
     }
 
     protected void login() {
-        if (!sharedLoginReady) {
-            synchronized (sharedLoginLock) {
-                if (!sharedLoginReady) {
-                    int maxAttempts = propInt('login.retry.attempts', 5)
-                    long baseDelayMs = propLong('login.retry.delay.ms', 250L)
-                    long initialJitterMs = java.util.concurrent.ThreadLocalRandom.current().nextLong(500L, 2500L)
-                    org.ngrinder.http.HTTPResponse response = null
+        org.ngrinder.http.HTTPResponse response = request.POST(fullUrl('/login').toString(), [
+                email   : loginEmail,
+                password: loginPassword
+        ])
 
-                    if (initialJitterMs > 0L) {
-                        try {
-                            Thread.sleep(initialJitterMs)
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt()
-                        }
-                    }
+        assertStatus(response, [200])
 
-                    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                        response = request.POST(
-                                fullUrl('/login').toString(),
-                                jsonBytes([
-                                        email   : loginEmail,
-                                        password: loginPassword
-                                ]),
-                                ['Content-Type': 'application/json; charset=UTF-8']
-                        )
+        Map loginResult = new groovy.json.JsonSlurper().parseText(response.getBodyText()) as Map
+        accessToken = loginResult.accessToken as String
+        refreshToken = extractRefreshToken(response)
 
-                        if (response.getStatusCode() == 200) {
-                            Map loginResult = new groovy.json.JsonSlurper().parseText(response.getBodyText()) as Map
-                            accessToken = loginResult.accessToken as String
-                            refreshToken = extractRefreshToken(response)
-
-                            assert accessToken : 'Login response did not include accessToken.'
-                            assert refreshToken : 'Login response did not include refresh cookie.'
-
-                            sharedAccessToken = accessToken
-                            sharedRefreshToken = refreshToken
-                            sharedLoginReady = true
-                            break
-                        }
-
-                        if (response.getStatusCode() < 500 || response.getStatusCode() >= 600 || attempt == maxAttempts) {
-                            break
-                        }
-
-                        long retryDelayMs = Math.min(baseDelayMs * attempt, 1500L) +
-                                java.util.concurrent.ThreadLocalRandom.current().nextLong(0L, 200L)
-                        try {
-                            Thread.sleep(retryDelayMs)
-                        } catch (InterruptedException ignored) {
-                            Thread.currentThread().interrupt()
-                            break
-                        }
-                    }
-
-                    assertStatus(response, [200])
-                }
-            }
-        }
-
-        accessToken = sharedAccessToken
-        refreshToken = sharedRefreshToken
+        assert accessToken : 'Login response did not include accessToken.'
+        assert refreshToken : 'Login response did not include refresh cookie.'
     }
 
     protected String fullUrl(String path) {
@@ -131,7 +76,7 @@ class TestRunner {
     protected Map<String, String> authHeaders(Map<String, String> extra = [:]) {
         Map<String, String> base = [:]
         if (accessToken != null && !accessToken.isBlank()) {
-            base['Authorization'] = "Bearer ${accessToken}".toString()
+            base['ATOKEN'] = "Bearer ${accessToken}".toString()
         }
         return headers(base, extra)
     }
@@ -139,7 +84,7 @@ class TestRunner {
     protected Map<String, String> refreshHeaders(Map<String, String> extra = [:]) {
         Map<String, String> base = authHeaders()
         if (refreshToken != null && !refreshToken.isBlank()) {
-            base['Cookie'] = "refresh=${refreshToken}".toString()
+            base.Cookie = "refresh=${refreshToken}".toString()
         }
         return headers(base, extra)
     }
@@ -263,17 +208,6 @@ class TestRunner {
         return raw == null || raw.isBlank() ? defaultValue : raw
     }
 
-    protected String uniqueSuffix() {
-        return java.util.UUID.randomUUID().toString().replace('-', '').substring(0, 8)
-    }
-
-    protected String uniqueValue(String prefix) {
-        return "${prefix}-${uniqueSuffix()}".toString()
-    }
-
-    protected String uniqueEmail(String prefix = 'ngrinder') {
-        return "${prefix}.${uniqueSuffix()}@example.com".toString()
-    }
     protected void assertStatus(org.ngrinder.http.HTTPResponse response, List<Integer> allowedStatuses = [200]) {
         int status = response.getStatusCode()
         assert allowedStatuses.contains(status) : "Unexpected status ${status}. Body: ${safeBody(response)}".toString()
@@ -310,156 +244,6 @@ class TestRunner {
         String json = groovy.json.JsonOutput.toJson(body)
         return json.getBytes(java.nio.charset.StandardCharsets.UTF_8)
     }
-
-    protected List<Map> workspaceListItems() {
-        def response = get('/workspace/list')
-        assertStatus(response)
-
-        def parsed = new groovy.json.JsonSlurper().parseText(response.getBodyText())
-        def payload = unwrapResponsePayload(parsed)
-
-        if (payload instanceof List) {
-            return payload as List<Map>
-        }
-
-        assert false : "Workspace list response had unexpected shape: ${payload?.getClass()?.name}".toString()
-    }
-
-    protected Object unwrapResponsePayload(Object payload) {
-        if (payload instanceof Map) {
-            if (payload.containsKey('body')) {
-                return unwrapResponsePayload(payload.body)
-            }
-            if (payload.containsKey('result')) {
-                return unwrapResponsePayload(payload.result)
-            }
-            if (payload.containsKey('content')) {
-                return unwrapResponsePayload(payload.content)
-            }
-        }
-        return payload
-    }
-
-    protected Long resolveWorkspaceIdx(boolean adminRequired = false) {
-        String configured = adminRequired
-                ? prop('workspaceAdminIdx', prop('workspaceIdx', ''))
-                : prop('workspaceIdx', '')
-
-        if (configured != null && !configured.isBlank()) {
-            return Long.parseLong(configured.trim())
-        }
-
-        List<Map> items = workspaceListItems()
-        List<Map> filtered = adminRequired
-                ? items.findAll { Map item -> (item.level ?: '').toString() == 'ADMIN' }
-                : items
-
-        assert filtered != null && !filtered.isEmpty() : (
-                adminRequired ? 'No ADMIN workspace is available for this user.' :
-                        'No accessible workspace is available for this user.'
-        ).toString()
-
-        def selected = filtered[0]
-        def idxValue = selected.post_idx ?: selected.idx
-        assert idxValue != null : 'Workspace list item did not contain an index.'
-        return idxValue instanceof Number ? ((Number) idxValue).longValue() : Long.parseLong(idxValue.toString())
-    }
-
-    protected long resolveDeleteStartIdx() {
-        long configuredStartIdx = propLong('workspaceDeleteIdx',
-                propLong('workspaceIdx',
-                        propLong('workspaceAdminIdx', -1L)))
-
-        if (configuredStartIdx >= 0L) {
-            return configuredStartIdx
-        }
-
-        return resolveWorkspaceIdx(true)
-    }
-
-    protected void initializeDeleteCursor() {
-        if (sharedDeleteCursor.get() < 0L) {
-            synchronized (sharedDeleteCursorLock) {
-                if (sharedDeleteCursor.get() < 0L) {
-                    sharedDeleteCursor.set(resolveDeleteStartIdx())
-                }
-            }
-        }
-    }
-
-    protected long reserveDeleteStartIdx() {
-        initializeDeleteCursor()
-        return sharedDeleteCursor.getAndIncrement()
-    }
-
-    protected void advanceDeleteCursor(long nextIdx) {
-        initializeDeleteCursor()
-
-        while (true) {
-            long current = sharedDeleteCursor.get()
-            if (nextIdx <= current) {
-                return
-            }
-
-            if (sharedDeleteCursor.compareAndSet(current, nextIdx)) {
-                return
-            }
-        }
-    }
-
-    protected boolean isWorkspaceAccessDeniedResponse(org.ngrinder.http.HTTPResponse response) {
-        String body = response == null ? null : response.getBodyText()
-        if (body == null || body.isBlank()) {
-            return false
-        }
-
-        try {
-            def parsed = new groovy.json.JsonSlurper().parseText(body)
-            if (parsed instanceof Map && parsed.containsKey('code')) {
-                def code = parsed.code
-                return code != null && code.toString() == '6011'
-            }
-
-            def payload = unwrapResponsePayload(parsed)
-            if (payload instanceof Map && payload.containsKey('code')) {
-                def code = payload.code
-                return code != null && code.toString() == '6011'
-            }
-        } catch (Exception ignored) {
-            // Treat malformed bodies as non-skippable so the failure is visible.
-        }
-
-        return false
-    }
-
-    protected Long deleteWorkspaceByIncrementingIdx(long startIdx) {
-        int maxAttempts = Math.max(1, propInt('workspaceDeleteSearchLimit', 10000))
-        long currentIdx = startIdx
-        org.ngrinder.http.HTTPResponse response = null
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++, currentIdx++) {
-            response = postEmpty('/workspace/delete/' + currentIdx)
-            int status = response.getStatusCode()
-
-            if (status == 200) {
-                grinder.logger.info("Deleted workspace idx={}", currentIdx)
-                advanceDeleteCursor(currentIdx + 1L)
-                return currentIdx
-            }
-
-            boolean skipResponse = status == 403 || status == 404 || (status == 400 && isWorkspaceAccessDeniedResponse(response))
-            if (!skipResponse) {
-                assert false : "Unexpected delete status ${status} for idx ${currentIdx}. Body: ${safeBody(response)}".toString()
-            }
-
-            grinder.logger.debug("Workspace idx={} was not deleted (status={}), trying next idx", currentIdx, status)
-            advanceDeleteCursor(currentIdx + 1L)
-        }
-
-        String lastBody = response == null ? '' : safeBody(response)
-        assert false : "Failed to delete a workspace starting from idx ${startIdx} after ${maxAttempts} attempts. Last response: ${lastBody}".toString()
-    }
-
     @BeforeProcess
     static void beforeProcess() {
         initProcess("workspace-delete")
@@ -470,13 +254,13 @@ class TestRunner {
         grinder.statistics.delayReports = true
 
         login()
-        initializeDeleteCursor()
 
     }
 
     @Test
     void test() {
-        deleteWorkspaceByIncrementingIdx(reserveDeleteStartIdx())
+        def response = postEmpty('/workspace/delete/' + propLong('workspaceIdx', 1L))
+        assertStatus(response)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.example.WaffleBear.config;
 
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -20,6 +21,7 @@ public class MinioProperties {
     private String secretKey;
     private String bucket_cloud;
     private String bucket_work;
+    @Getter
     private String region;
 
     private String s3Endpoint;
@@ -29,6 +31,7 @@ public class MinioProperties {
     private String s3BucketWork;
     private String s3Region;
 
+    @Getter
     private int presignedUrlExpirySeconds = 6000;
 
     public String getProvider() {
@@ -56,6 +59,7 @@ public class MinioProperties {
         return secretKey;
     }
 
+    // --- 에러 해결을 위해 메서드 명칭을 기존과 동일하게 복구 (getBucket_cloud) ---
     public String getBucket_cloud() {
         if (isS3Provider()) {
             return firstNonBlank(s3BucketCloud, bucket_cloud);
@@ -70,17 +74,6 @@ public class MinioProperties {
         return firstNonBlank(bucket_work, bucket_cloud);
     }
 
-    public String getRegion() {
-        if (isS3Provider()) {
-            return firstNonBlank(s3Region, region);
-        }
-        return region;
-    }
-
-    public int getPresignedUrlExpirySeconds() {
-        return presignedUrlExpirySeconds;
-    }
-
     public boolean isS3Provider() {
         return "s3".equals(getProvider());
     }
@@ -93,16 +86,12 @@ public class MinioProperties {
     }
 
     private String firstNonBlank(String... values) {
-        if (values == null) {
-            return null;
-        }
-
+        if (values == null) return null;
         for (String value : values) {
             if (value != null && !value.isBlank()) {
                 return value.trim();
             }
         }
-
         return null;
     }
 }

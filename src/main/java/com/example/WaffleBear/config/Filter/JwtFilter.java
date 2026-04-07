@@ -44,7 +44,10 @@ public class JwtFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         // 1. 헤더에서 Authorization 키를 찾음
-        String authorization = request.getHeader("Authorization");
+        String authorization = request.getHeader("ATOKEN");
+        if (authorization == null || authorization.isBlank()) {
+            authorization = request.getHeader("Authorization");
+        }
 
         // [추가] 헤더에 토큰이 없는데 SSE 연결 요청(/sse/connect)인 경우, 쿼리 파라미터 확인
         if (authorization == null && request.getRequestURI().contains("/sse/connect")) {

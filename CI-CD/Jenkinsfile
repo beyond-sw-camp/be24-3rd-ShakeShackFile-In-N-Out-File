@@ -1,0 +1,226 @@
+pipeline {
+  agent {
+    kubernetes {
+      label "gradle-kaniko-helm-${UUID.randomUUID().toString()}"
+      defaultContainer 'gradle'
+      yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  restartPolicy: Never
+  serviceAccountName: jenkins-deployer
+  containers:
+    - name: gradle
+      image: gradle:8.9-jdk17
+      command: ['cat']
+      tty: true
+      volumeMounts:
+        - name: gradle-cache
+          mountPath: /home/gradle/.gradle
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:debug
+      command: ['/busybox/sh', '-c', 'sleep infinity']
+      tty: true
+      volumeMounts:
+        - name: docker-config
+          mountPath: /kaniko/.docker
+    - name: helm
+      image: alpine/helm:3.14.0
+      command: ['cat']
+      tty: true
+  volumes:
+    - name: gradle-cache
+      emptyDir: {}
+    - name: docker-config
+      secret:
+        secretName: dockerhub-cred
+        items:
+          - key: .dockerconfigjson
+            path: config.json
+"""
+    }
+  }
+
+  options {
+    skipDefaultCheckout(true)
+    timestamps()
+  }
+
+  parameters {
+    string(name: 'APP_REPO_URL', defaultValue: 'https://github.com/beyond-sw-camp/be24-3rd-ShakeShackFile-In-N-Out-File.git', description: 'Backend application repository URL.')
+    string(name: 'APP_REPO_BRANCH', defaultValue: 'main', description: 'Backend application branch to build.')
+    string(name: 'HELM_REPO_URL', defaultValue: 'https://github.com/Lumisia/fullstack_project.git', description: 'Repository that contains the main Helm chart.')
+    string(name: 'HELM_REPO_BRANCH', defaultValue: 'main', description: 'Helm repository branch to deploy.')
+    string(name: 'HELM_CHART_PATH', defaultValue: 'helm', description: 'Chart path inside the Helm repository.')
+    string(name: 'HELM_RELEASE_NAME', defaultValue: 'waffle-release', description: 'Helm release name.')
+    string(name: 'K8S_NAMESPACE', defaultValue: 'helm-service', description: 'Kubernetes namespace to deploy into.')
+    string(name: 'FRONTEND_IMAGE_REPOSITORY', defaultValue: 'lumisia/frontend', description: 'Frontend image repository used by the Helm chart.')
+    string(name: 'FRONTEND_IMAGE_TAG', defaultValue: 'latest', description: 'Frontend image tag used by the Helm chart.')
+    string(name: 'WEBSOCKET_IMAGE_REPOSITORY', defaultValue: 'lumisia/websocket-server', description: 'Websocket image repository used by the Helm chart.')
+    string(name: 'WEBSOCKET_IMAGE_TAG', defaultValue: 'latest', description: 'Websocket image tag used by the Helm chart.')
+    string(name: 'HELM_SECRET_VALUES_CREDENTIAL_ID', defaultValue: '', description: 'Optional Jenkins secret file credential ID for private Helm values.')
+    booleanParam(name: 'FORCE_DEPLOY', defaultValue: false, description: 'Deploy even when the Jenkins branch is not main.')
+  }
+
+  environment {
+    APP_DIR = 'app'
+    HELM_SOURCE_DIR = 'helm-source'
+    BACKEND_IMAGE_REPOSITORY = 'lumisia/backend'
+    BACKEND_IMAGE_TAG = "v${env.BUILD_NUMBER}"
+  }
+
+  stages {
+    stage('Checkout Sources') {
+      steps {
+        container('gradle') {
+          dir("${env.APP_DIR}") {
+            checkout([$class: 'GitSCM',
+              branches: [[name: "*/${params.APP_REPO_BRANCH}"]],
+              userRemoteConfigs: [[url: params.APP_REPO_URL]]
+            ])
+          }
+          dir("${env.HELM_SOURCE_DIR}") {
+            checkout([$class: 'GitSCM',
+              branches: [[name: "*/${params.HELM_REPO_BRANCH}"]],
+              userRemoteConfigs: [[url: params.HELM_REPO_URL]]
+            ])
+          }
+        }
+      }
+    }
+
+    stage('Gradle Build') {
+      steps {
+        container('gradle') {
+          dir("${env.APP_DIR}") {
+            sh '''
+              set -eu
+              chmod +x ./gradlew || true
+              ./gradlew --no-daemon clean bootJar -x test
+
+              mkdir -p build/docker
+
+              JAR_PATH="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1)"
+              if [ -z "$JAR_PATH" ]; then
+                echo "Boot jar not found in build/libs" >&2
+                exit 1
+              fi
+
+              cp "$JAR_PATH" build/docker/app.jar
+              ls -lh build/docker/app.jar
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Helm Sanity Check') {
+      steps {
+        container('helm') {
+          sh """
+            set -eu
+            CHART_DIR="${WORKSPACE}/${HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}"
+            helm lint "$CHART_DIR"
+
+            RENDERED_FILE="$(mktemp)"
+            helm template "${params.HELM_RELEASE_NAME}" "$CHART_DIR" --namespace "${params.K8S_NAMESPACE}" > "$RENDERED_FILE"
+
+            grep -q 'path: /api/ws-stomp' "$RENDERED_FILE"
+            grep -q 'path: /api/sse' "$RENDERED_FILE"
+            grep -q 'name: ${params.HELM_RELEASE_NAME}-wafflebear-websocket' "$RENDERED_FILE"
+            grep -q 'name: redis' "$RENDERED_FILE"
+            grep -q 'name: redis-sentinel' "$RENDERED_FILE"
+
+            rm -f "$RENDERED_FILE"
+          """
+        }
+      }
+    }
+
+    stage('Kaniko Build & Push') {
+      when {
+        expression {
+          def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
+          return params.FORCE_DEPLOY || branch == '' || branch == 'main' || branch == 'origin/main' || branch.endsWith('/main')
+        }
+      }
+      steps {
+        container('kaniko') {
+          sh """
+            set -eu
+            /kaniko/executor \
+              --context="${WORKSPACE}/${APP_DIR}" \
+              --dockerfile="${WORKSPACE}/${APP_DIR}/CI-CD/Dockerfile" \
+              --destination="${BACKEND_IMAGE_REPOSITORY}:${BACKEND_IMAGE_TAG}" \
+              --destination="${BACKEND_IMAGE_REPOSITORY}:latest" \
+              --cache=true \
+              --single-snapshot \
+              --use-new-run \
+              --snapshot-mode=redo
+          """
+        }
+      }
+    }
+
+    stage('Deploy Helm Stack') {
+      when {
+        expression {
+          def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: ''
+          return params.FORCE_DEPLOY || branch == '' || branch == 'main' || branch == 'origin/main' || branch.endsWith('/main')
+        }
+      }
+      steps {
+        container('helm') {
+          script {
+            if (params.HELM_SECRET_VALUES_CREDENTIAL_ID?.trim()) {
+              withCredentials([file(credentialsId: params.HELM_SECRET_VALUES_CREDENTIAL_ID.trim(), variable: 'HELM_PRIVATE_VALUES')]) {
+                sh """
+                  set -eu
+                  CHART_DIR="${WORKSPACE}/${HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}"
+                  helm upgrade --install "${params.HELM_RELEASE_NAME}" "$CHART_DIR" \
+                    --namespace "${params.K8S_NAMESPACE}" \
+                    --create-namespace \
+                    -f "$HELM_PRIVATE_VALUES" \
+                    --set-string backend.image.repository="${BACKEND_IMAGE_REPOSITORY}" \
+                    --set-string backend.image.tag="${BACKEND_IMAGE_TAG}" \
+                    --set-string websocket.image.repository="${params.WEBSOCKET_IMAGE_REPOSITORY}" \
+                    --set-string websocket.image.tag="${params.WEBSOCKET_IMAGE_TAG}" \
+                    --set-string frontend.image.repository="${params.FRONTEND_IMAGE_REPOSITORY}" \
+                    --set-string frontend.image.tag="${params.FRONTEND_IMAGE_TAG}" \
+                    --wait --timeout 15m --atomic
+                """
+              }
+            } else {
+              sh """
+                set -eu
+                CHART_DIR="${WORKSPACE}/${HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}"
+                helm upgrade --install "${params.HELM_RELEASE_NAME}" "$CHART_DIR" \
+                  --namespace "${params.K8S_NAMESPACE}" \
+                  --create-namespace \
+                  --set-string backend.image.repository="${BACKEND_IMAGE_REPOSITORY}" \
+                  --set-string backend.image.tag="${BACKEND_IMAGE_TAG}" \
+                  --set-string websocket.image.repository="${params.WEBSOCKET_IMAGE_REPOSITORY}" \
+                  --set-string websocket.image.tag="${params.WEBSOCKET_IMAGE_TAG}" \
+                  --set-string frontend.image.repository="${params.FRONTEND_IMAGE_REPOSITORY}" \
+                  --set-string frontend.image.tag="${params.FRONTEND_IMAGE_TAG}" \
+                  --wait --timeout 15m --atomic
+              """
+            }
+          }
+        }
+      }
+    }
+
+    stage('Result') {
+      steps {
+        script {
+          def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: '(manual)'
+          echo "Backend image: ${env.BACKEND_IMAGE_REPOSITORY}:${env.BACKEND_IMAGE_TAG}"
+          echo "Helm release: ${params.HELM_RELEASE_NAME} in namespace ${params.K8S_NAMESPACE}"
+          echo "Helm repo: ${params.HELM_REPO_URL}@${params.HELM_REPO_BRANCH}/${params.HELM_CHART_PATH}"
+          echo "Branch context: ${branch}"
+        }
+      }
+    }
+  }
+}
