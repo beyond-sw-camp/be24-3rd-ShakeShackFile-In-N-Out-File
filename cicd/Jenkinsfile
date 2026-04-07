@@ -8,6 +8,7 @@ apiVersion: v1
 kind: Pod
 spec:
   restartPolicy: Never
+  serviceAccountName: jenkins-deployer
   containers:
     - name: gradle
       image: gradle:8.9-jdk17
@@ -25,6 +26,10 @@ spec:
           mountPath: /kaniko/.docker
         - name: workspace
           mountPath: /workspace
+    - name: helm
+      image: alpine/helm:3.14.0
+      command: ['cat']
+      tty: true
   volumes:
     - name: gradle-cache
       emptyDir: {}
@@ -44,6 +49,7 @@ spec:
     IMAGE_NAME = 'lumisia/waffle-app'
     IMAGE_TAG  = "${env.BUILD_NUMBER}"
   }
+
   stages {
     stage('Checkout') {
       steps {
@@ -73,7 +79,7 @@ spec:
           sh """
             /kaniko/executor \
               --context=${WORKSPACE} \
-              --dockerfile=${WORKSPACE}/Dockerfile \
+              --dockerfile=${WORKSPACE}/cicd/Dockerfile \
               --destination=${IMAGE_NAME}:${IMAGE_TAG} \
               --destination=${IMAGE_NAME}:latest \
               --single-snapshot \
@@ -85,9 +91,23 @@ spec:
       }
     }
 
+    stage('Deploy Backend') {
+      steps {
+        container('helm') {
+          sh """
+            helm upgrade --install wafflebear ${WORKSPACE}/helm/wafflebear \
+              --namespace wafflebear \
+              --create-namespace \
+              --set backend.image.tag=${IMAGE_TAG} \
+              --wait --timeout 5m
+          """
+        }
+      }
+    }
+
     stage('Result') {
       steps {
-        echo "Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
+        echo "Deployed: ${IMAGE_NAME}:${IMAGE_TAG}"
       }
     }
   }
