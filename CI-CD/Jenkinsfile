@@ -117,22 +117,30 @@ spec:
     stage('Helm Sanity Check') {
       steps {
         container('helm') {
-          sh """
-            set -eu
-            CHART_DIR="${WORKSPACE}/${HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}"
-            helm lint "$CHART_DIR"
+          script {
+            withEnv([
+              "CHART_DIR=${env.WORKSPACE}/${env.HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}",
+              "DEPLOY_NAMESPACE=${params.K8S_NAMESPACE}",
+              "RELEASE_NAME=${params.HELM_RELEASE_NAME}"
+            ]) {
+              sh '''
+                set -eu
 
-            RENDERED_FILE="$(mktemp)"
-            helm template "${params.HELM_RELEASE_NAME}" "$CHART_DIR" --namespace "${params.K8S_NAMESPACE}" > "$RENDERED_FILE"
+                RENDERED_FILE="$(mktemp)"
+                trap 'rm -f "$RENDERED_FILE"' EXIT
 
-            grep -q 'path: /api/ws-stomp' "$RENDERED_FILE"
-            grep -q 'path: /api/sse' "$RENDERED_FILE"
-            grep -q 'name: ${params.HELM_RELEASE_NAME}-wafflebear-websocket' "$RENDERED_FILE"
-            grep -q 'name: redis' "$RENDERED_FILE"
-            grep -q 'name: redis-sentinel' "$RENDERED_FILE"
+                helm lint "$CHART_DIR"
+                helm template "$RELEASE_NAME" "$CHART_DIR" --namespace "$DEPLOY_NAMESPACE" > "$RENDERED_FILE"
 
-            rm -f "$RENDERED_FILE"
-          """
+                grep -q '^kind: Rollout$' "$RENDERED_FILE"
+                grep -q "name: $RELEASE_NAME-wafflebear-backend" "$RENDERED_FILE"
+                grep -q "activeService: $RELEASE_NAME-wafflebear-backend" "$RENDERED_FILE"
+                grep -q '^kind: StatefulSet$' "$RENDERED_FILE"
+                grep -q 'name: redis' "$RENDERED_FILE"
+                grep -q 'name: redis-sentinel' "$RENDERED_FILE"
+              '''
+            }
+          }
         }
       }
     }
@@ -146,18 +154,27 @@ spec:
       }
       steps {
         container('kaniko') {
-          sh """
-            set -eu
-            /kaniko/executor \
-              --context="${WORKSPACE}/${APP_DIR}" \
-              --dockerfile="${WORKSPACE}/${APP_DIR}/CI-CD/Dockerfile" \
-              --destination="${BACKEND_IMAGE_REPOSITORY}:${BACKEND_IMAGE_TAG}" \
-              --destination="${BACKEND_IMAGE_REPOSITORY}:latest" \
-              --cache=true \
-              --single-snapshot \
-              --use-new-run \
-              --snapshot-mode=redo
-          """
+          script {
+            withEnv([
+              "KANIKO_CONTEXT=${env.WORKSPACE}/${env.APP_DIR}",
+              "KANIKO_DOCKERFILE=${env.WORKSPACE}/${env.APP_DIR}/CI-CD/Dockerfile",
+              "BACKEND_IMAGE=${env.BACKEND_IMAGE_REPOSITORY}:${env.BACKEND_IMAGE_TAG}",
+              "BACKEND_IMAGE_LATEST=${env.BACKEND_IMAGE_REPOSITORY}:latest"
+            ]) {
+              sh '''
+                set -eu
+                /kaniko/executor \
+                  --context="$KANIKO_CONTEXT" \
+                  --dockerfile="$KANIKO_DOCKERFILE" \
+                  --destination="$BACKEND_IMAGE" \
+                  --destination="$BACKEND_IMAGE_LATEST" \
+                  --cache=true \
+                  --single-snapshot \
+                  --use-new-run \
+                  --snapshot-mode=redo
+              '''
+            }
+          }
         }
       }
     }
@@ -172,39 +189,49 @@ spec:
       steps {
         container('helm') {
           script {
-            if (params.HELM_SECRET_VALUES_CREDENTIAL_ID?.trim()) {
-              withCredentials([file(credentialsId: params.HELM_SECRET_VALUES_CREDENTIAL_ID.trim(), variable: 'HELM_PRIVATE_VALUES')]) {
-                sh """
+            withEnv([
+              "CHART_DIR=${env.WORKSPACE}/${env.HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}",
+              "DEPLOY_NAMESPACE=${params.K8S_NAMESPACE}",
+              "RELEASE_NAME=${params.HELM_RELEASE_NAME}",
+              "BACKEND_IMAGE_REPO=${env.BACKEND_IMAGE_REPOSITORY}",
+              "BACKEND_IMAGE_TAG=${env.BACKEND_IMAGE_TAG}",
+              "WEBSOCKET_IMAGE_REPO=${params.WEBSOCKET_IMAGE_REPOSITORY}",
+              "WEBSOCKET_IMAGE_TAG=${params.WEBSOCKET_IMAGE_TAG}",
+              "FRONTEND_IMAGE_REPO=${params.FRONTEND_IMAGE_REPOSITORY}",
+              "FRONTEND_IMAGE_TAG=${params.FRONTEND_IMAGE_TAG}"
+            ]) {
+              if (params.HELM_SECRET_VALUES_CREDENTIAL_ID?.trim()) {
+                withCredentials([file(credentialsId: params.HELM_SECRET_VALUES_CREDENTIAL_ID.trim(), variable: 'HELM_PRIVATE_VALUES')]) {
+                  sh '''
+                    set -eu
+                    helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" \
+                      --namespace "$DEPLOY_NAMESPACE" \
+                      --create-namespace \
+                      -f "$HELM_PRIVATE_VALUES" \
+                      --set-string backend.image.repository="$BACKEND_IMAGE_REPO" \
+                      --set-string backend.image.tag="$BACKEND_IMAGE_TAG" \
+                      --set-string websocket.image.repository="$WEBSOCKET_IMAGE_REPO" \
+                      --set-string websocket.image.tag="$WEBSOCKET_IMAGE_TAG" \
+                      --set-string frontend.image.repository="$FRONTEND_IMAGE_REPO" \
+                      --set-string frontend.image.tag="$FRONTEND_IMAGE_TAG" \
+                      --wait --timeout 15m --atomic
+                  '''
+                }
+              } else {
+                sh '''
                   set -eu
-                  CHART_DIR="${WORKSPACE}/${HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}"
-                  helm upgrade --install "${params.HELM_RELEASE_NAME}" "$CHART_DIR" \
-                    --namespace "${params.K8S_NAMESPACE}" \
+                  helm upgrade --install "$RELEASE_NAME" "$CHART_DIR" \
+                    --namespace "$DEPLOY_NAMESPACE" \
                     --create-namespace \
-                    -f "$HELM_PRIVATE_VALUES" \
-                    --set-string backend.image.repository="${BACKEND_IMAGE_REPOSITORY}" \
-                    --set-string backend.image.tag="${BACKEND_IMAGE_TAG}" \
-                    --set-string websocket.image.repository="${params.WEBSOCKET_IMAGE_REPOSITORY}" \
-                    --set-string websocket.image.tag="${params.WEBSOCKET_IMAGE_TAG}" \
-                    --set-string frontend.image.repository="${params.FRONTEND_IMAGE_REPOSITORY}" \
-                    --set-string frontend.image.tag="${params.FRONTEND_IMAGE_TAG}" \
+                    --set-string backend.image.repository="$BACKEND_IMAGE_REPO" \
+                    --set-string backend.image.tag="$BACKEND_IMAGE_TAG" \
+                    --set-string websocket.image.repository="$WEBSOCKET_IMAGE_REPO" \
+                    --set-string websocket.image.tag="$WEBSOCKET_IMAGE_TAG" \
+                    --set-string frontend.image.repository="$FRONTEND_IMAGE_REPO" \
+                    --set-string frontend.image.tag="$FRONTEND_IMAGE_TAG" \
                     --wait --timeout 15m --atomic
-                """
+                '''
               }
-            } else {
-              sh """
-                set -eu
-                CHART_DIR="${WORKSPACE}/${HELM_SOURCE_DIR}/${params.HELM_CHART_PATH}"
-                helm upgrade --install "${params.HELM_RELEASE_NAME}" "$CHART_DIR" \
-                  --namespace "${params.K8S_NAMESPACE}" \
-                  --create-namespace \
-                  --set-string backend.image.repository="${BACKEND_IMAGE_REPOSITORY}" \
-                  --set-string backend.image.tag="${BACKEND_IMAGE_TAG}" \
-                  --set-string websocket.image.repository="${params.WEBSOCKET_IMAGE_REPOSITORY}" \
-                  --set-string websocket.image.tag="${params.WEBSOCKET_IMAGE_TAG}" \
-                  --set-string frontend.image.repository="${params.FRONTEND_IMAGE_REPOSITORY}" \
-                  --set-string frontend.image.tag="${params.FRONTEND_IMAGE_TAG}" \
-                  --wait --timeout 15m --atomic
-              """
             }
           }
         }
