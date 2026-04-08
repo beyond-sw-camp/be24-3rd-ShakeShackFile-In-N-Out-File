@@ -8,6 +8,6 @@ public class TestController {
 
     @GetMapping("/version")
     public void Test() {
-        System.out.println("v2");
+        System.out.println("v3");
     }
 }
